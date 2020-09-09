@@ -94,14 +94,21 @@ node {
                 stage('handle dev PR') {
                     // only create draft PR if a PR has been handed in already, otherwise skip this step
                     if (prJsonObj != null) {
-                        String baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
+                        GString baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
 
                         println baseRefTargetRef // todo remove debug
 
                         // get all open pull requests
                         net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
                         for(item in openPRsJsonObj.items){
-                            println "itemTitle: ${item.title}; itemNo: ${item.number}"
+                            net.sf.json.JSONObject prObject = getGithubPRJsonObj(item.number, orgName, projectName)
+                            if("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef){
+                                // PR exists
+                                println("PR exists!") // todo check if this works
+                            }else{
+                                println ("PR does not exist!")
+                            }
+
                         }
 
 
