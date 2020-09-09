@@ -366,7 +366,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                     return 0
                 } else {
                     println "Hotfix branch versioning is invalid in comparison to master branch versioning." +
-                            "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!" +
+                            "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!\n" +
                             "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
                             "masterVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
                     return -1
