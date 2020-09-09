@@ -61,6 +61,15 @@ node {
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
 
+            stage('def'){
+                // todo this should be in post processing
+                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
+                // if manually triggered for deploy, no PR should be created
+                if (env.BRANCH_NAME == "main" && params.deploy == "false") {
+                    println(sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true))
+                }
+            }
+
             // checkout scm
             String commitHash = ""
             stage('checkout') {
@@ -180,12 +189,6 @@ node {
                 // call codecov.io
                 withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
-                }
-
-                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
-                // if manually triggered for deploy, no PR should be created
-                if (env.BRANCH_NAME == "main" && params.deploy == "false") {
-                    println(sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true))
                 }
 
                 // notify Rocket.Chat
