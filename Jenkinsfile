@@ -94,7 +94,7 @@ node {
                 stage('handle dev PR') {
                     // only create draft PR if a PR has been handed in already, otherwise skip this step
                     if (prJsonObj != null) {
-                        GString baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
+                        GString baseRefTargetRef = "dev,${prJsonObj.head.ref}"
 
                         println baseRefTargetRef // todo remove debug
 
@@ -105,6 +105,7 @@ node {
                             if("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef){
                                 // PR exists
                                 println("PR exists!") // todo check if this works
+                                break
                             }else{
                                 println ("PR does not exist!")
                             }
