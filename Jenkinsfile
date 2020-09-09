@@ -65,10 +65,8 @@ node {
                 // todo this should be in post processing
                 // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
                 // if manually triggered for deploy, no PR should be created
-                println (env.BRANCH_NAME)
-                println(params.deploy)
 
-                if (env.BRANCH_NAME == "main" && params.deploy == "false") {
+                if (env.BRANCH_NAME == "main" && params.deploy != "true") {
                     println(sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true))
                 }
             }
