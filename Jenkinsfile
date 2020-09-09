@@ -101,7 +101,7 @@ node {
                         // get all open pull requests
                         net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
                         for(item in openPRsJsonObj.items){
-                            net.sf.json.JSONObject prObject = getGithubPRJsonObj(item.number, orgName, projectName)
+                            net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
                             if("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef){
                                 // PR exists
                                 println("PR exists!") // todo check if this works
