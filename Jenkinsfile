@@ -76,8 +76,15 @@ node {
 
                 if (env.BRANCH_NAME == "main" && params.deploy != "true") {
                     String[] gitLogLatestMerge = sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true).toString().split("\\s")
+
+                    for(i in gitLogLatestMerge){
+                        println(i)
+                    }
+
                     String latestMergeCommitSHA = gitLogLatestMerge[4]
                     String latestMergeBranchName = gitLogLatestMerge[37]
+
+
 
                     // create new branch with same name as before + hand in a pull request for dev branch
                     withCredentials([string(credentialsId: sshCredentialsId, variable: 'sshKey')]) {
