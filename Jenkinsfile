@@ -131,11 +131,6 @@ node {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
                 }
 
-                // if this has been a merge of a hotfix or a release additional steps needs to be carried out
-                if(env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev"){
-
-                }
-
                 // notify Rocket.Chat
                 String successMsg = buildSuccessMsg()
                 notifyRocketChat(rocketChatChannel, ':jenkins_party:', successMsg)
