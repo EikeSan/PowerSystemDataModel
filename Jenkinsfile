@@ -102,6 +102,7 @@ node {
                         withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
                             sh(script: "cd $projectName && " +
                                     "ssh-agent bash -c \"ssh-add $sshKey; " +
+                                    "git branch | grep -v \"main\" | xargs git branch -D;"+
                                     "git fetch && git checkout $currentBranchName && git pull && " +
                                     "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
                                     "git push --set-upstream origin $latestMergeBranchName\"")
