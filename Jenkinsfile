@@ -56,11 +56,12 @@ node {
             notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
 
             // determine branch name that should be checked out
-            String currentBranchName = determineBranchName(orgName, projectName)
-            String targetBranchName = determineTargetBranchName(orgName, projectName)
+            JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
+            String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
 
-            // checkout csm
+            // checkout scm
             String commitHash = ""
             stage('checkout') {
                 // commit hash from scm checkout
@@ -74,7 +75,7 @@ node {
                 if (targetBranchName == "main" || targetBranchName == "dev") {
                     if (checkVersion(currentBranchName, targetBranchName, projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
                         error "Version check failed! See log for version differences."
-                } else if (targetBranchName == "" || targetBranchName == null) {
+                } else if (targetBranchName == null) {
                     // if this branch is the dev branch, we can still do version check to compare if dev and master have the same semnatic version
                     if (env.BRANCH_NAME == "dev") {
                         if (checkVersion(currentBranchName, "main", projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
@@ -92,13 +93,14 @@ node {
                 // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
                 stage('handle dev PR'){
                     // only create draft PR if a PR has been handed in already, otherwise skip this step
-                    if (env.CHANGE_ID != null) {
+                    if (prJsonObj != null) {
+                        String baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
 
-
+                        println baseRefTargetRef
 
 
                     } else{
-                        println "No PR for branch handed in yet. Not going to create a draft PR for dev branch!"
+                        println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
                     }
                 }
             }
@@ -167,7 +169,8 @@ node {
             println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}] " + e)
 
             // notify rocket chat
-            String branchName = determineBranchName(orgName, projectName)
+            JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            String branchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String errorMsg = "CI failed.\n" +
                     "*project:* ${projectName}\n" +
                     "*branch:* ${branchName}\n" +
@@ -199,27 +202,6 @@ def gitCheckout(String relativeTargetDir, String gitCheckoutUrl, String branch, 
             submoduleCfg                     : [],
             userRemoteConfigs                : [[credentialsId: sshCredentialsId, url: gitCheckoutUrl]]
     ])
-}
-
-def determineBranchName(String orgName, String projectName) {
-    if (env.CHANGE_ID == null) {
-        // no PR exists
-        return env.BRANCH_NAME
-    } else {
-        // PR exists, curl the api to get the needed details
-        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
-        return jsonObj.head.ref
-    }
-}
-
-def determineTargetBranchName(String orgName, String projectName) {
-    if (env.CHANGE_ID == null) {
-        return null
-    } else {
-        // PR exists, curl the api and retrieve target branch
-        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
-        return jsonObj.base.ref
-    }
 }
 
 /* gradle */
@@ -333,6 +315,24 @@ def curlByPR(String prId, String orgName, String repoName) {
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
     return jsonResponseString
 }
+
+
+def getPRJsonObj(String orgName, String projectName, String changeId){
+    if (changeId == null) {
+        return null
+    } else {
+        // PR exists, curl the api and retrieve target branch
+        return getGithubPRJsonObj(changeId, orgName, projectName)
+    }
+}
+
+
+
+
+
+
+
+
 
 def checkVersion(String branchName, String targetBranchName, String relativeGitDir, String projectName, String gitCheckoutUrl, String sshCredentialsId) {
     // get current branch type
