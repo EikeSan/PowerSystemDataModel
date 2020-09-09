@@ -372,15 +372,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
             if (targetBranchType == "main") {
                 boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
                 boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
-                boolean patch = ((sourceBranchVersion[2].toInteger() + 1) == targetBranchVersion[2].toInteger())
-
-                println major
-                println minor
-                println patch
-
-                println(sourceBranchVersion[2].toInteger() + 1)
-                println(targetBranchVersion[2].toInteger())
-
+                boolean patch = (sourceBranchVersion[2].toInteger() == targetBranchVersion[2].toInteger() + 1)
 
                 if (major && minor && patch) {
                     return 0
