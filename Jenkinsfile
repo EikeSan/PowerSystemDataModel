@@ -133,13 +133,15 @@ node {
 
                 // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                 // if manually triggered for deploy, no PR should be created
+                // todo JH this should be done at first before even version check to ensure the hotfix won't be lost in dev
+                // todo JH put this into own methods
                 if (env.BRANCH_NAME == "main" && params.deploy != "true") {
 
                     String gitLogLatestMergeString = sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true).toString()
                     String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
 
                     String latestMergeCommitSHA = gitLogLatestMerge[4]
-                    String latestMergeBranchName = gitLogLatestMerge[37]
+                    String latestMergeBranchName = gitLogLatestMerge[37].toLowerCase()
 
 
                     // create new branch with same name as before + hand in a pull request for dev branch,
@@ -497,7 +499,7 @@ def getBranchType(String branchName) {
     def feature_pattern = "^\\pL{2}/#\\d+.*"
     def hotfix_pattern = ".*hotfix/\\pL{2}/#\\d+.*"
     def main_pattern = ".*main"
-    if (branchName =~ dev_pattern) {
+    if (branchName.toLowerCase() =~ dev_pattern) {
         return "dev"
     } else if (branchName =~ release_pattern) {
         return "release"
