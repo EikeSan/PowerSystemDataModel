@@ -79,6 +79,8 @@ node {
                     String latestMergeCommitSHA = gitLogLatestMerge[5]
                     String latestMergeBranchName = gitLogLatestMerge[38]
 
+                    println(gitLogLatestMerge)
+
                     println(latestMergeCommitSHA)
                     println(latestMergeBranchName)
 
