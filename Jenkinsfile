@@ -118,7 +118,7 @@ node {
                                 String curlCmd = "set +x && " +
                                         "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
                                         " https://api.github.com/repos/$orgName/$projectName/pulls" +
-                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
+                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"$currentBranchName\", \"base\": \"dev\"}'"
 
                                 println curlCmd
 
