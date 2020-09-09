@@ -96,7 +96,14 @@ node {
                     if (prJsonObj != null) {
                         String baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
 
-                        println baseRefTargetRef
+                        println baseRefTargetRef // todo remove debug
+
+                        // get all open pull requests
+                        net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
+                        for(item in openPRsJsonObj.items){
+                            println "itemTitle: ${item.title}; itemNo: ${item.number}"
+                        }
+
 
 
                     } else {
@@ -314,6 +321,11 @@ def curlByPR(String prId, String orgName, String repoName) {
     def curlUrl = "curl https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
     return jsonResponseString
+}
+
+def curlOpenPRs(String orgName, String repoName) {
+    String curlUrl = "https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
+    def jsonObj = readJSON text: sh(script: curlUrl, returnStdout: true)
 }
 
 
