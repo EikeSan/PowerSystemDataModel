@@ -117,7 +117,7 @@ node {
                             withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
                                 String curlCmd = "set +x && " +
                                         "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-                                        " https://api.github.com/repos/$orgName/$projectName/pulls"
+                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
                                         " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
 
                                 println curlCmd
