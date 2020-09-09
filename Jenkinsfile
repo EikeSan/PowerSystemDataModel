@@ -1,447 +1,298 @@
 #!groovy​
 
+/**
+ * configuration parameters
+ */
 
-////////////////////////////////
-// general config values
-////////////////////////////////
+/* project configuration */
+String javaVersionId = 'jdk-8' // id that matches the java tool with the java version that should be used set as jenkins property
+
+/* git configuration */
+String projectName = 'PowerSystemDataModel' // name of the repository, is case insensitive
+String orgName = 'ie3-institute' // name of the github organization
+String gitCheckoutUrl = "git@github.com:$orgName/${projectName}.git"
+String sshCredentialsId = '19f16959-8a0d-4a60-bd1f-5adb4572b702' // id that matches the ssh credentials to interact with the git set as jenkins property
+
+/* ci configuration */
+String sonarqubeProjectKey = 'edu.ie3:PowerSystemDataModel' // sonarqube project key, case-sensitive
+String codeCovTokenId = 'psdm-codecov-token' // id that matches the code coverage token set as jenkins property
+
+/* maven central configuration */
+String mavenCentralCredentialsId = '87bfb2d4-7613-4816-9fe1-70dfd7e6dec2' // id that matches the maven central credentials set as jenkins property
+String mavenCentralSignKeyFileId = 'dc96216c-d20a-48ff-98c0-1c7ba096d08d' // id that matches the maven central sign key file set as jenkins property
+String mavenCentralSignKeyId = 'a1357827-1516-4fa2-ab8e-72cdea07a692' // id that matches the maven central sign key id set as jenkins property
+
+/* Rocket.Chat configuration */
+String rocketChatChannel = 'jenkins'
+
+/**
+ * pipeline configuration
+ */
+
+/* setup pipeline properties */
+// dev and master need manual deploy capabilities
+if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
+    constantBranchesProps()
+} else {
+    // all other branches need trigger capabilities for PRs
+    temporaryBranchesProps()
+}
+
+/**
+ * pipeline
+ */
+
+node {
+    ansiColor('xterm') {
+        try {
+            // set java version
+            setJavaVersion(javaVersionId)
+
+            echo sh(returnStdout: true, script: 'env')
+
+            // set build display name
+            currentBuild.displayName = determineDisplayName()
+
+            // notify rocket chat
+            String startPipelineMsg = buildStartMsg()
+            notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
+
+            // determine branch name that should be checked out
+            String currentBranchName = determineBranchName(orgName, projectName)
+            String targetBranchName = determineTargetBranchName(orgName, projectName)
+
+            // checkout csm
+            String commitHash = ""
+            stage('checkout') {
+                // commit hash from scm checkout
+                // https://www.theserverside.com/blog/Coffee-Talk-Java-News-Stories-and-Opinions/Complete-Jenkins-Git-environment-variables-list-for-batch-jobs-and-shell-script-builds
+                commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
+            }
+
+            // version check
+            stage('version check') {
+                // version check can only be executed, if target branch is known (derived from a PR)
+                if (targetBranchName == "main" || targetBranchName == "dev") {
+                    if (checkVersion(currentBranchName, targetBranchName, projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
+                        error "Version check failed! See log for version differences."
+                } else if (targetBranchName == "" || targetBranchName == null) {
+                    // if this branch is the dev branch, we can still do version check to compare if dev and master have the same semnatic version
+                    if (env.BRANCH_NAME == "dev") {
+                        if (checkVersion(currentBranchName, "main", projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
+                            error "Version check failed! See log for version differences."
+                    } else {
+                        println "No PR for branch '$currentBranchName' exists. Cannot check versioning! Please create a PR to enable version check."
+                    }
+                } else {
+                    error "Target branch name '$targetBranchName' for merging is not supported! Please select either 'dev' or 'main' as " +
+                            "target branch for merging!"
+                }
+            }
+
+            // test the project
+            stage('run tests') {
+                gradle('--refresh-dependencies clean spotlessCheck pmdMain pmdTest spotbugsMain ' +
+                        'spotbugsTest test jacocoTestReport jacocoTestCoverageVerification', projectName)
+            }
+
+            // sonarqube analysis
+            stage('sonarqube analysis') {
+                String sonarqubeCmd = determineSonarqubeGradleCmd(sonarqubeProjectKey, orgName, projectName)
+                withSonarQubeEnv() { // will pick the global server connection from jenkins for sonarqube
+                    gradle(sonarqubeCmd, projectName)
+                }
+            }
+
+            // sonarqube quality gate
+            stage("quality gate") {
+                timeout(time: 1, unit: 'HOURS') {
+                    // just in case something goes wrong, pipeline will be killed after a timeout
+                    def qg = waitForQualityGate() // reuse taskId previously collected by withSonarQubeEnv
+                    if (qg.status != 'OK') {
+                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                    }
+                }
+            }
+
+            // deploy stage only if branch is main or dev
+            if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
+                stage('deploy') {
+                    // todo JH
+                }
+            }
+
+            // post processing
+            stage('post processing') {
+                // publish reports
+                publishReports(projectName)
+
+                // call codecov.io
+                withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
+                    sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
+                }
+
+                // if this has been a merge of a hotfix or a release additional steps needs to be carried out
+                if(env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev"){
+
+                }
+
+                // notify Rocket.Chat
+                String successMsg = buildSuccessMsg()
+                notifyRocketChat(rocketChatChannel, ':jenkins_party:', successMsg)
+            }
+
+        } catch (Exception e) {
+            // set build result to failure
+            currentBuild.result = 'FAILURE'
+
+            // publish reports even on failure
+            publishReports(projectName)
+
+            // print exception
+            Date date = new Date()
+            println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}] " + e)
+
+            // notify rocket chat
+            String branchName = determineBranchName(orgName, projectName)
+            String errorMsg = "CI failed.\n" +
+                    "*project:* ${projectName}\n" +
+                    "*branch:* ${branchName}\n" +
+                    "*error:* ${e.getMessage()}\n"
+            notifyRocketChat(rocketChatChannel, ':jenkins_explode:', errorMsg)
+        }
+
+    }
+}
 
 
-//// Rocket.Chat channel to publish updates
-final String rocketChatChannel = "jenkins"
+/**
+ * pipeline stages - all methods require node context
+ */
 
-
-//// project build dir order
-//// this list contains the build order
-//// normally it *should* start with the project under investigation
-//// but if this projects depends on some of our other projects, you have to *build the dependencies first*!
-//// *IMPORTANT:* you *MUST* use exact repo names as this will used for checkout!
-//// *IMPORTANT2:* you must provide exact 4 elements!
-projects = ['powersystemdatamodel']
-
-orgNames = ['ie3-institute']
-urls = ['git@github.com:' + orgNames.get(0)]
-
-def sonarqubeProjectKey = "edu.ie3:PowerSystemDataModel"
-
-/// code coverage token id
-codeCovTokenId = "psdm-codecov-token"
-
-//// internal jenkins credentials link for git ssh keys
-//// requires the ssh key to be stored in the internal jenkins credentials keystore
-def sshCredentialsId = "19f16959-8a0d-4a60-bd1f-5adb4572b702"
-
-//// internal maven central credentials
-def mavenCentralCredentialsId = "87bfb2d4-7613-4816-9fe1-70dfd7e6dec2"
-
-def mavenCentralSignKeyFileId = "dc96216c-d20a-48ff-98c0-1c7ba096d08d"
-
-def mavenCentralSignKeyId = "a1357827-1516-4fa2-ab8e-72cdea07a692"
-
-//// define and setjava version ////
-//// requires the java version to be set in the internal jenkins java version management
-//// use identifier accordingly
-def javaVersionId = 'jdk-8'
-
-//// set java version method (needs node{} for execution)
-void setJavaVersion(javaVersionId) {
+def setJavaVersion(String javaVersionId) {
     env.JAVA_HOME = "${tool javaVersionId}"
     env.PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
 }
 
-/// global config variables that should be available during runtime
-/// and will be overwritten during runtime -> DO NOT CHANGE THEM
-String featureBranchName = ""
+/* git interaction */
 
-//// gradle tasks that are executed
-def gradleTasks = "--refresh-dependencies clean spotlessCheck pmdMain pmdTest spotbugsMain spotbugsTest test" // the gradle tasks that are executed on ALL projects
-def mainProjectGradleTasks = "jacocoTestReport jacocoTestCoverageVerification" // additional tasks that are only executed on project 0 (== main project)
-// if you need additional tasks for deployment add them here
-def deployGradleTasks = ""
+def gitCheckout(String relativeTargetDir, String gitCheckoutUrl, String branch, String sshCredentialsId) {
+    checkout([
+            $class                           : 'GitSCM',
+            branches                         : [[name: branch]],
+            doGenerateSubmoduleConfigurations: false,
+            extensions                       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: relativeTargetDir]],
+            submoduleCfg                     : [],
+            userRemoteConfigs                : [[credentialsId: sshCredentialsId, url: gitCheckoutUrl]]
+    ])
+}
 
-/// commit hash
-def commitHash = ""
+def determineBranchName(String orgName, String projectName) {
+    if (env.CHANGE_ID == null) {
+        // no PR exists
+        return env.BRANCH_NAME
+    } else {
+        // PR exists, curl the api to get the needed details
+        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
+        return jsonObj.head.ref
+    }
+}
 
-if (env.BRANCH_NAME == "master") {
+def determineTargetBranchName(String orgName, String projectName) {
+    if (env.CHANGE_ID == null) {
+        return null
+    } else {
+        // PR exists, curl the api and retrieve target branch
+        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
+        return jsonObj.base.ref
+    }
+}
 
-    // setup
-    getMasterBranchProps()
+/* gradle */
 
-    // pure deployment
-    if (params.deploy == "true") {
+def gradle(String command, String relativeProjectDir) {
+    env.JENKINS_NODE_COOKIE = 'dontKillMe' // this is necessary for the Gradle daemon to be kept alive
 
-        node {
-            ansiColor('xterm') {
-                // get the deployment version
-                def projectVersion =  sh(returnStdout: true, script: "cd ${projects.get(0)}; set +x; ./gradlew -q printVersion")
+    // switch directory to be able to use gradle wrapper
+    sh(script: """cd $relativeProjectDir""" + ''' set +x; ./gradlew ''' + """$command""", returnStdout: true)
+}
 
-                try {
-
-                    // notify rocket chat about the deployment
-                    rocketSend channel: rocketChatChannel, emoji: ':jenkins_triggered:',
-                            message: "deploying v"+projectVersion+" to oss sonatype. if this is a release deployment pls remember to stag and release afterwards!\n"
-                    rawMessage: true
-
-                    // set java version
-                    setJavaVersion(javaVersionId)
-
-                    // set build display name
-                    currentBuild.displayName = "deployment v"+projectVersion +" (" + currentBuild.displayName + ")"
-
-                    // checkout from scm
-                    stage('checkout from scm') {
-                        try {
-                            // merged mode
-                            commitHash = gitCheckout(projects.get(0), urls.get(0), 'refs/heads/master', sshCredentialsId).GIT_COMMIT
-                        } catch (exc) {
-                            sh 'exit 1' // failure due to not found master branch
-                        }
-                    }
-
-                    // test the project
-                    stage("gradle test ${projects.get(0)}") {
-                        // build and test the project
-                        gradle("${gradleTasks} ${mainProjectGradleTasks}")
-                    }
-
-                    // execute sonarqube code analysis
-                    stage('SonarQube analysis') {
-                        withSonarQubeEnv() { // Will pick the global server connection from jenkins for sonarqube
-                            gradle("sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey -Dsonar.exclusions=docs/")
-                        }
-                    }
-
-                    // wait for the sonarqube quality gate
-                    stage("Quality Gate") {
-                        timeout(time: 1, unit: 'HOURS') {
-                            // Just in case something goes wrong, pipeline will be killed after a timeout
-                            def qg = waitForQualityGate() // Reuse taskId previously collected by withSonarQubeEnv
-                            if (qg.status != 'OK') {
-                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                            }
-                        }
-                    }
-
-                    // publish report und coverage
-                    stage('publish reports + coverage') {
-                        // publish reports
-                        publishReports()
-
-                        // inform codecov.io
-                        withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
-                            // call codecov
-                            sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
-                        }
-
-                    }
-
-                    // deploy snapshot version to oss sonatype
-                    stage('deploy') {
-                        // get the sonatype credentials stored in the jenkins secure keychain
-                        withCredentials([usernamePassword(credentialsId: mavenCentralCredentialsId, usernameVariable: 'mavencentral_username', passwordVariable: 'mavencentral_password'),
-                                         file(credentialsId: mavenCentralSignKeyFileId, variable: 'mavenCentralKeyFile'),
-                                         usernamePassword(credentialsId: mavenCentralSignKeyId, passwordVariable: 'signingPassword', usernameVariable: 'signingKeyId')]) {
-                            deployGradleTasks = "--refresh-dependencies clean test " + deployGradleTasks + "publish -Puser=${env.mavencentral_username} -Ppassword=${env.mavencentral_password} -Psigning.keyId=${env.signingKeyId} -Psigning.password=${env.signingPassword} -Psigning.secretKeyRingFile=${env.mavenCentralKeyFile}"
-
-                            // see https://docs.gradle.org/6.0.1/release-notes.html "Publication of SHA256 and SHA512 checksums"
-                            def preventSHACheckSums = "-Dorg.gradle.internal.publish.checksums.insecure=true"
-                            gradle("${deployGradleTasks} $preventSHACheckSums")
-
-                        }
-
-                        // notify rocket chat
-                        rocketSend channel: rocketChatChannel, emoji: ':jenkins_party:',
-                                message: "deployment v"+projectVersion+" successful. If this was a release deployment pls remember visiting https://oss.sonatype.org " +
-                                        "too stag and release the artifact!" +
-                                        "*repo:* ${urls.get(0)}/${projects.get(0)}\n" +
-                                        "*branch:* master \n"
-                        rawMessage: true
-                    }
-
-                } catch (Exception e) {
-                    // set build result to failure
-                    currentBuild.result = 'FAILURE'
-
-                    // publish reports even on failure
-                    publishReports()
-
-                    // print exception
-                    Date date = new Date()
-                    println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}]" + e)
-
-                    // notify rocket chat
-                    rocketSend channel: rocketChatChannel, emoji: ':jenkins_explode:',
-                            message: "deployment v"+projectVersion+" failed!\n" +
-                                    "*repo:* ${urls.get(0)}/${projects.get(0)}\n" +
-                                    "*branch:* master\n"
-                    rawMessage: true
-                }
-
+def determineSonarqubeGradleCmd(String sonarqubeProjectKey, String orgName, String projectName) {
+    switch (env.BRANCH_NAME) {
+        case "main":
+            return "sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey"
+            break
+        case "dev":
+            return "sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey"
+            break
+        default:
+            String gradleCommand = "sonarqube -Dsonar.projectKey=$sonarqubeProjectKey"
+            // if this branch has a PR, the sonarqube cmd needs to be adapted
+            if (env.CHANGE_ID == null) {
+                // no PR exists
+                return gradleCommand + " -Dsonar.branch.name=${env.BRANCH_NAME}"
+            } else {
+                // PR exists, adapt cmd accordingly
+                return gradleCommand + " -Dsonar.pullrequest.branch=${env.BRANCH_NAME} -Dsonar.pullrequest.key=${env.CHANGE_ID} " +
+                        "-Dsonar.pullrequest.base=master -Dsonar.pullrequest.github.repository=${orgName}/${projectName} " +
+                        "-Dsonar.pullrequest.provider=Github"
             }
+            break
+    }
+}
 
-        }
-
+def determineDisplayName() {
+    // todo JH
+    String buildVersionNo = currentBuild.displayName // current build default is always the build version no
+    String
+    if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
 
     } else {
-        // merge of features
-
-        node {
-            ansiColor('xterm') {
-                try {
-                    // set java version
-                    setJavaVersion(javaVersionId)
-
-                    // checkout from scm
-                    stage('checkout from scm') {
-                        try {
-                            // merged mode
-                            commitHash = gitCheckout(projects.get(0), urls.get(0), 'refs/heads/master', sshCredentialsId).GIT_COMMIT
-                        } catch (exc) {
-                            sh 'exit 1' // failure due to not found master branch
-                        }
-                    }
-
-                    // get information based on commit hash
-                    def jsonObject = getGithubCommitJsonObj(commitHash, orgNames.get(0), projects.get(0))
-                    featureBranchName = splitStringToBranchName(jsonObject.commit.message)
-
-                    def message = (featureBranchName?.trim()) ?
-                            "master branch build triggered (incl. snapshot deploy) by merging pr from feature branch '${featureBranchName}'"
-                            : "master branch build triggered (incl. snapshot deploy) for commit with message '${jsonObject.commit.message}'"
-
-                    // notify rocket chat about the started feature branch run
-                    rocketSend channel: rocketChatChannel, emoji: ':jenkins_triggered:',
-                            message: message + "\n"
-                    rawMessage: true
-
-                    // set build display name
-                    currentBuild.displayName = ((featureBranchName?.trim()) ? "merge pr branch '${featureBranchName}'" : "commit '" +
-                            "${jsonObject.commit.message.length() <= 20 ? jsonObject.commit.message : jsonObject.commit.message.substring(0, 20)}...'") + " (" + currentBuild.displayName + ")"
-
-
-                    // test the project
-                    stage("gradle test ${projects.get(0)}") {
-                        // build and test the project
-                        gradle("${gradleTasks} ${mainProjectGradleTasks}")
-                    }
-
-                    // execute sonarqube code analysis
-                    stage('SonarQube analysis') {
-                        withSonarQubeEnv() { // Will pick the global server connection from jenkins for sonarqube
-                            gradle("sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey ")
-                        }
-                    }
-
-
-                    // wait for the sonarqube quality gate
-                    stage("Quality Gate") {
-                        timeout(time: 1, unit: 'HOURS') {
-                            // Just in case something goes wrong, pipeline will be killed after a timeout
-                            def qg = waitForQualityGate() // Reuse taskId previously collected by withSonarQubeEnv
-                            if (qg.status != 'OK') {
-                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                            }
-                        }
-                    }
-
-                    // post processing
-                    stage('publish reports + coverage') {
-                        // publish reports
-                        publishReports()
-
-                        // inform codecov.io
-                        withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
-                            // call codecov
-                            sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
-                        }
-
-                    }
-
-
-                    // deploy snapshot version to oss sonatype
-                    stage('deploy') {
-                        // get the sonatype credentials stored in the jenkins secure keychain
-                        withCredentials([usernamePassword(credentialsId: mavenCentralCredentialsId, usernameVariable: 'mavencentral_username', passwordVariable: 'mavencentral_password'),
-                                         file(credentialsId: mavenCentralSignKeyFileId, variable: 'mavenCentralKeyFile'),
-                                         usernamePassword(credentialsId: mavenCentralSignKeyId, passwordVariable: 'signingPassword', usernameVariable: 'signingKeyId')]) {
-                            deployGradleTasks = "--refresh-dependencies clean test " + deployGradleTasks + "publish -Puser=${env.mavencentral_username} -Ppassword=${env.mavencentral_password} -Psigning.keyId=${env.signingKeyId} -Psigning.password=${env.signingPassword} -Psigning.secretKeyRingFile=${env.mavenCentralKeyFile}"
-
-                            gradle("${deployGradleTasks}")
-
-                        }
-
-                        // notify rocket chat
-                        message = (featureBranchName?.trim()) ?
-                                "master branch build successful! Merged pr from feature branch '${featureBranchName}'"
-                                : "master branch build successful! Build commit with message is '${jsonObject.commit.message}'"
-                        rocketSend channel: rocketChatChannel, emoji: ':jenkins_party:',
-                                message: message + "\n" +
-                                        "*repo:* ${urls.get(0)}/${projects.get(0)}\n" +
-                                        "*branch:* master \n"
-                        rawMessage: true
-
-                    }
-
-
-                } catch (Exception e) {
-                    // set build result to failure
-                    currentBuild.result = 'FAILURE'
-
-                    // publish reports even on failure
-                    publishReports()
-
-                    // print exception
-                    Date date = new Date()
-                    println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}]" + e)
-
-                    // notify rocket chat
-                    rocketSend channel: rocketChatChannel, emoji: ':jenkins_explode:',
-                            message: "merge feature into master failed!\n" +
-                                    "*repo:* ${urls.get(0)}/${projects.get(0)}\n"
-                    rawMessage: true
-                }
-
-            }
-
-        }
 
     }
 
-} else {
-
-    // setup
-    getFeatureBranchProps()
-
-    node {
-
-        def repoName = ""
-        // init variables depending of this build is triggered by a branch with PR or without PR
-        if (env.CHANGE_ID == null) {
-            // no PR exists
-            featureBranchName = env.BRANCH_NAME
-            repoName = orgNames.get(0) + "/" + projects.get(0)
-        } else {
-            // PR exists
-            /// curl the api to get debugging details
-            def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgNames.get(0), projects.get(0))
-
-            featureBranchName = jsonObj.head.ref
-            repoName = jsonObj.head.repo.full_name
-
-        }
-
-
-        ansiColor('xterm') {
-            try {
-                // set java version
-                setJavaVersion(javaVersionId)
-
-                /// set the build name
-                currentBuild.displayName = featureBranchName + " (" + currentBuild.displayName + ")"
-
-                // notify rocket chat about the started feature branch run
-                rocketSend channel: rocketChatChannel, emoji: ':jenkins_triggered:',
-                        message: "feature branch build triggered:\n" +
-                                "*repo:* ${repoName}\n" +
-                                "*branch:* ${featureBranchName}\n"
-                rawMessage: true
-
-                stage('checkout from scm') {
-
-                    try {
-                        commitHash = gitCheckout(projects.get(0), urls.get(0), featureBranchName, sshCredentialsId).GIT_COMMIT
-                    } catch (exc) {
-                        // our target repo failed during checkout
-                        sh 'exit 1' // failure due to not found forcedPR branch
-                    }
-
-                }
-
-                // test the project
-                stage("gradle test ${projects.get(0)}") {
-
-                    // build and test the project
-                    gradle("${gradleTasks} ${mainProjectGradleTasks}")
-                }
-
-                // execute sonarqube code analysis
-                stage('SonarQube analysis') {
-                    withSonarQubeEnv() { // Will pick the global server connection from jenkins for sonarqube
-
-                        // do we have a PR?
-                        String gradleCommand = "sonarqube -Dsonar.projectKey=$sonarqubeProjectKey"
-
-                        if (env.CHANGE_ID != null) {
-                            gradleCommand = gradleCommand + " -Dsonar.pullrequest.branch=${featureBranchName} -Dsonar.pullrequest.key=${env.CHANGE_ID} -Dsonar.pullrequest.base=master -Dsonar.pullrequest.github.repository=${orgNames.get(0)}/${projects.get(0)} -Dsonar.pullrequest.provider=Github"
-                        } else {
-                            gradleCommand = gradleCommand + " -Dsonar.branch.name=$featureBranchName"
-                        }
-                        gradle(gradleCommand)
-                    }
-                }
-
-                // wait for the sonarqube quality gate
-                stage("Quality Gate") {
-                    timeout(time: 1, unit: 'HOURS') {
-                        // Just in case something goes wrong, pipeline will be killed after a timeout
-                        def qg = waitForQualityGate() // Reuse taskId previously collected by withSonarQubeEnv
-                        if (qg.status != 'OK') {
-                            error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        }
-                    }
-                }
-
-                // post processing
-                stage('post processing') {
-                    // publish reports
-                    publishReports()
-
-                    withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
-                        // call codecov
-                        sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
-                    }
-
-                    // notify rocket chat
-                    rocketSend channel: rocketChatChannel, emoji: ':jenkins_party:',
-                            message: "feature branch test successful!\n" +
-                                    "*repo:* ${repoName}\n" +
-                                    "*branch:* ${featureBranchName}\n"
-                    rawMessage: true
-                }
-            } catch (Exception e) {
-                // set build result to failure
-                currentBuild.result = 'FAILURE'
-
-                // publish reports even on failure
-                publishReports()
-
-                // print exception
-                Date date = new Date()
-                println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}]" + e)
-
-                // notify rocket chat
-                rocketSend channel: rocketChatChannel, emoji: ':jenkins_explode:',
-                        message: "feature branch test failed!\n" +
-                                "*repo:* ${repoName}\n" +
-                                "*branch:* ${featureBranchName}\n"
-                rawMessage: true
-            }
-
-        }
-    }
+    return "dummyDisplayName"
 }
 
+def publishReports(String relativeProjectDir) {
+    // publish test reports
+    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: relativeProjectDir + '/build/reports/tests/allTests', reportFiles: 'index.html', reportName: "${relativeProjectDir}_java_tests_report", reportTitles: ''])
 
-def getFeatureBranchProps() {
+    // publish jacoco report for main project only
+    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: relativeProjectDir + '/build/reports/jacoco', reportFiles: 'index.html', reportName: "${relativeProjectDir}_jacoco_report", reportTitles: ''])
 
-    properties(
-            [pipelineTriggers([
-                    issueCommentTrigger('.*!test.*')])
-            ])
+    // publish pmd report for main project only
+    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: relativeProjectDir + '/build/reports/pmd', reportFiles: 'main.html', reportName: "${relativeProjectDir}_pmd_report", reportTitles: ''])
 
+    // publish spotbugs report for main project only
+    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: relativeProjectDir + '/build/reports/spotbugs', reportFiles: 'main.html', reportName: "${relativeProjectDir}_spotbugs_report", reportTitles: ''])
 }
 
+/* Rocket.Chat */
 
-def getMasterBranchProps() {
+def notifyRocketChat(String rocketChatChannel, String emoji, String message) {
+    rocketSend channel: rocketChatChannel, emoji: emoji,
+            message: message
+    rawMessage: true
+}
+
+def buildSuccessMsg() {
+    // todo JH
+    return "dummySuccessMsg"
+}
+
+def buildStartMsg() {
+    // todo JH
+    return "dummyStartMsg"
+}
+
+/**
+ * utility functions - methods that does not require node context
+ */
+
+/* properties */
+
+def constantBranchesProps() {
     properties([parameters(
             [string(defaultValue: '', description: '', name: 'deploy', trim: true)]),
                 [$class: 'RebuildSettings', autoRebuild: false, rebuildDisabled: false],
@@ -449,82 +300,161 @@ def getMasterBranchProps() {
     ])
 }
 
-////////////////////////////////////
-// git checkout
-// NOTE: requires node {}
-////////////////////////////////////
-def gitCheckout(String relativeTargetDir, String baseUrl, String branch, String sshCredentialsId) {
-    checkout([
-            $class                           : 'GitSCM',
-            branches                         : [[name: branch]],
-            doGenerateSubmoduleConfigurations: false,
-            extensions                       : [[$class: 'RelativeTargetDirectory', relativeTargetDir: relativeTargetDir]],
-            submoduleCfg                     : [],
-            userRemoteConfigs                : [[credentialsId: sshCredentialsId, url: baseUrl + "/" + relativeTargetDir + ".git"]]
-    ])
+def temporaryBranchesProps() {
+    properties(
+            [pipelineTriggers([
+                    issueCommentTrigger('.*!test.*')])
+            ])
 }
 
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// publish reports
-// IMPORTANT: has to be called inside the same node{} as where the build process (report generation) took place!
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-def publishReports() {
-    // publish test reports
-    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: projects.get(0) + '/build/reports/tests/allTests', reportFiles: 'index.html', reportName: "${projects.get(0)}_java_tests_report", reportTitles: ''])
-
-    // publish jacoco report for main project only
-    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: projects.get(0) + '/build/reports/jacoco', reportFiles: 'index.html', reportName: "${projects.get(0)}_jacoco_report", reportTitles: ''])
-
-    // publish pmd report for main project only
-    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: projects.get(0) + '/build/reports/pmd', reportFiles: 'main.html', reportName: "${projects.get(0)}_pmd_report", reportTitles: ''])
-
-    // publish spotbugs report for main project only
-    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, escapeUnderscores: false, keepAll: true, reportDir: projects.get(0) + '/build/reports/spotbugs', reportFiles: 'main.html', reportName: "${projects.get(0)}_spotbugs_report", reportTitles: ''])
-
-}
-
-
-// gradle wrapper method for easy execution
-// requires the gradle version to be configured with the same name under tools in jenkins configuration
-def gradle(String command) {
-    env.JENKINS_NODE_COOKIE = 'dontKillMe' // this is necessary for the Gradle daemon to be kept alive
-
-    // switch directory to bew able to use gradle wrapper
-    sh """cd ${projects.get(0)}""" + ''' set +x; ./gradlew ''' + """$command"""
-}
+/* git interaction */
 
 def getGithubPRJsonObj(String prId, String orgName, String repoName) {
     def jsonObj = readJSON text: curlByPR(prId, orgName, repoName)
     return jsonObj
 }
 
-
 def curlByPR(String prId, String orgName, String repoName) {
-
     def curlUrl = "curl https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
-
     return jsonResponseString
 }
 
-def getGithubCommitJsonObj(String commit_sha, String orgName, String repoName) {
-    def jsonObj = readJSON text: curlByCSHA(commit_sha, orgName, repoName)
-    return jsonObj
+def checkVersion(String branchName, String targetBranchName, String relativeGitDir, String projectName, String gitCheckoutUrl, String sshCredentialsId) {
+    // get current branch type
+    String branchType = getBranchType(branchName)
+    if (branchType == null) {
+        println "Cannot derive branch type from current branch with name '$branchName'."
+        return -1
+    }
+
+    // compare the version
+    /// save the current version string
+    String[] currentVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
+
+    /// switch to the comparison branch
+    gitCheckout(projectName, gitCheckoutUrl, targetBranchName, sshCredentialsId)
+    String[] targetBranchVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
+
+    if (compareVersionParts(branchType, currentVersion, getBranchType(targetBranchName), targetBranchVersion) != 0) {
+        // comparison failed
+        return -1
+    } else {
+        // switch back to current branch
+        gitCheckout(projectName, gitCheckoutUrl, branchName, sshCredentialsId)
+        return 0
+    }
 }
 
-def curlByCSHA(String commit_sha, String orgName, String repoName) {
+def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, String targetBranchType, String[] targetBranchVersion) {
 
-    def curlUrl = "curl https://api.github.com/repos/" + orgName + "/" + repoName + "/commits/" + commit_sha
-    String jsonResponseString = sh(script: curlUrl, returnStdout: true)
+    switch (sourceBranchType) {
+        case "hotfix":
+            if (targetBranchType == "main") {
 
-    return jsonResponseString
+            } else if (targetBranchType == "dev") {
+
+            } else {
+                // invalid branch type for hotfix merge
+                return -1
+            }
+            break
+        case "feature":
+            if (targetBranchType == "dev") {
+                // no change in semVer allowed
+                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
+                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
+
+                if (major && minor && patch) {
+                    return 0
+                } else {
+                    println "Feature branch versioning differs from dev branch versioning. This is not allowed!\n" +
+                            "featureVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "devVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
+
+            } else {
+                // invalid branch type for feature merge
+                println "Invalid target branch type '$targetBranchType' for feature branch. Feature branches can only" +
+                        "be merged into dev branch!"
+                return -1
+            }
+            break
+        case "release":
+            if (targetBranchType == "main") {
+
+            } else if (targetBranchType == "dev") {
+
+            } else {
+                // invalid branch type for release merge
+            }
+            // major == major OR major == major + 1, minor == minor OR minor == minor + 1, patch == patch == 0
+            break
+        case "dev":
+            // target branch type can only be main branch
+            if (targetBranchType == "main") {
+                // only major and minor version parts need to be checked
+                Integer targetMajor = targetBranchVersion[0].toInteger()
+                Integer targetMinor = targetBranchVersion[1].toInteger()
+
+                Integer sourceMajor = sourceBranchVersion[0].toInteger()
+                Integer sourceMinor = sourceBranchVersion[1].toInteger()
+
+                boolean validCheck1 = targetMajor == sourceMajor && targetMinor == sourceMinor + 1
+                boolean validCheck2 = targetMajor == sourceMajor + 1 && targetMinor == sourceMinor
+
+                // patch version always needs to be 0
+                boolean patchValid = sourceBranchVersion[2] == 0
+
+                if ((validCheck1 || validCheck2) && patchValid) {
+                    return 0
+                } else {
+                    println "Dev branch versioning does not fit to main branch versioning!\n" +
+                            "devVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "mainVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
+            } else {
+                // invalid branch type for dev branch version comparison
+                println "Invalid branch type '$targetBranchType' to be compared with dev branch. Dev branch version" +
+                        "can only be compared with main branch type!"
+                return -1
+            }
+            break
+        default:
+            return -1
+            break
+    }
+
+
 }
 
-def splitStringToBranchName(String string) {
-    def obj = string.split().find { it.startsWith("ie3-institute") }
-    if (obj)
-        return (obj as String).substring(14)
+def getBranchType(String branchName) {
+    def dev_pattern = ".*dev"
+    def release_pattern = ".*rel/.*"
+    def feature_pattern = "^\\pL{2}/#\\d+.*"
+    def hotfix_pattern = ".*hotfix/\\pL{2}/#\\d+.*"
+    def main_pattern = ".*main"
+    if (branchName =~ dev_pattern) {
+        return "dev"
+    } else if (branchName =~ release_pattern) {
+        return "release"
+    } else if (branchName =~ main_pattern) {
+        return "main"
+    } else if (branchName =~ feature_pattern) {
+        return "feature"
+    } else if (branchName =~ hotfix_pattern) {
+        return "hotfix"
+    } else {
+        return null
+    }
+}
+
+def getCompareBranchName(String branchType) {
+    if (branchType == "feature")
+        return "dev"
     else
-        return ""
+        return "main"
 }
