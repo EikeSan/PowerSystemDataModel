@@ -370,14 +370,14 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
     switch (sourceBranchType) {
         case "hotfix":
             if (targetBranchType == "main") {
-                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
-                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
                 boolean patch = (sourceBranchVersion[2].toInteger() + 1 == targetBranchVersion[2].toInteger())
 
                 if (major && minor && patch) {
                     return 0
                 } else {
-                    println "Hotfix branch versioning is invalid in comparison to master branch versioning." +
+                    println "Hotfix branch versioning is invalid in comparison to master branch versioning. " +
                             "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!\n" +
                             "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
                             "masterVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
@@ -386,14 +386,14 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
 
             } else if (targetBranchType == "dev") {
 
-                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
-                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
                 boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
 
                 if (major && minor && patch) {
                     return 0
                 } else {
-                    println "Hotfix branch versioning is invalid in comparison to dev branch versioning." +
+                    println "Hotfix branch versioning is invalid in comparison to dev branch versioning. " +
                             "Major and minor version must be equal and patch version must be 0" +
                             "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
                             "devVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
@@ -408,8 +408,8 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
         case "feature":
             if (targetBranchType == "dev") {
                 // no change in semVer allowed
-                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
-                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
                 boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
 
                 if (major && minor && patch) {
