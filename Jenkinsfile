@@ -56,11 +56,12 @@ node {
             notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
 
             // determine branch name that should be checked out
-            String currentBranchName = determineBranchName(orgName, projectName)
-            String targetBranchName = determineTargetBranchName(orgName, projectName)
+            net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
+            String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
 
-            // checkout csm
+            // checkout scm
             String commitHash = ""
             stage('checkout') {
                 // commit hash from scm checkout
@@ -74,7 +75,7 @@ node {
                 if (targetBranchName == "main" || targetBranchName == "dev") {
                     if (checkVersion(currentBranchName, targetBranchName, projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
                         error "Version check failed! See log for version differences."
-                } else if (targetBranchName == "" || targetBranchName == null) {
+                } else if (targetBranchName == null) {
                     // if this branch is the dev branch, we can still do version check to compare if dev and master have the same semnatic version
                     if (env.BRANCH_NAME == "dev") {
                         if (checkVersion(currentBranchName, "main", projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
@@ -88,17 +89,53 @@ node {
                 }
             }
 
-            if(branchType == "hotfix" || branchType == "release"){
+            if (branchType == "hotfix" || branchType == "release") {
                 // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
-                stage('handle dev PR'){
+                stage('handle dev PR') {
                     // only create draft PR if a PR has been handed in already, otherwise skip this step
-                    if (env.CHANGE_ID != null) {
+                    if (prJsonObj != null) {
+                        GString baseRefTargetRef = "dev,${prJsonObj.head.ref}"
+
+                        println baseRefTargetRef // todo remove debug
+
+                        // get all open pull requests
+                        boolean devPRExists = false
+                        net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
+                        for (item in openPRsJsonObj.items) {
+                            net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
+                            if ("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef) {
+                                // PR exists
+                                devPRExists = true
+                                break
+                            }
+                        }
+
+                        if (!devPRExists) {
+                            println("i need to create a pr ...")
+
+                            // no dev PR exists, create one
+                            withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
+                                String curlCmd = "set +x && " +
+                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
+                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"$currentBranchName\", \"base\": \"dev\"," +
+                                        "\"draft\":\"true\"}'"
+
+                                println curlCmd
+
+//                                String curlCmd = "curl -X POST  \\\n" +
+//                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
+//                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
+//                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
+//                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
+                                println(sh(script: curlCmd, returnStdout: true))
+                            }
 
 
+                        }
 
-
-                    } else{
-                        println "No PR for branch handed in yet. Not going to create a draft PR for dev branch!"
+                    } else {
+                        println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
                     }
                 }
             }
@@ -146,7 +183,7 @@ node {
                 }
 
                 // if this has been a merge of a hotfix or a release additional steps needs to be carried out
-                if(env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev"){
+                if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
 
                 }
 
@@ -167,7 +204,8 @@ node {
             println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}] " + e)
 
             // notify rocket chat
-            String branchName = determineBranchName(orgName, projectName)
+            net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            String branchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String errorMsg = "CI failed.\n" +
                     "*project:* ${projectName}\n" +
                     "*branch:* ${branchName}\n" +
@@ -199,27 +237,6 @@ def gitCheckout(String relativeTargetDir, String gitCheckoutUrl, String branch, 
             submoduleCfg                     : [],
             userRemoteConfigs                : [[credentialsId: sshCredentialsId, url: gitCheckoutUrl]]
     ])
-}
-
-def determineBranchName(String orgName, String projectName) {
-    if (env.CHANGE_ID == null) {
-        // no PR exists
-        return env.BRANCH_NAME
-    } else {
-        // PR exists, curl the api to get the needed details
-        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
-        return jsonObj.head.ref
-    }
-}
-
-def determineTargetBranchName(String orgName, String projectName) {
-    if (env.CHANGE_ID == null) {
-        return null
-    } else {
-        // PR exists, curl the api and retrieve target branch
-        def jsonObj = getGithubPRJsonObj(env.CHANGE_ID, orgName, projectName)
-        return jsonObj.base.ref
-    }
 }
 
 /* gradle */
@@ -329,10 +346,27 @@ def getGithubPRJsonObj(String prId, String orgName, String repoName) {
 }
 
 def curlByPR(String prId, String orgName, String repoName) {
-    def curlUrl = "curl https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
+    def curlUrl = "set +x && curl -s https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
     return jsonResponseString
 }
+
+def curlOpenPRs(String orgName, String repoName) {
+    String curlUrl = "set +x && curl -s https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
+    def jsonObj = readJSON text: sh(script: curlUrl, returnStdout: true)
+    return jsonObj
+}
+
+
+def getPRJsonObj(String orgName, String projectName, String changeId) {
+    if (changeId == null) {
+        return null
+    } else {
+        // PR exists, curl the api and retrieve target branch
+        return getGithubPRJsonObj(changeId, orgName, projectName)
+    }
+}
+
 
 def checkVersion(String branchName, String targetBranchName, String relativeGitDir, String projectName, String gitCheckoutUrl, String sshCredentialsId) {
     // get current branch type
@@ -365,8 +399,35 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
     switch (sourceBranchType) {
         case "hotfix":
             if (targetBranchType == "main") {
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
+                boolean patch = (sourceBranchVersion[2].toInteger() == targetBranchVersion[2].toInteger() + 1)
+
+                if (major && minor && patch) {
+                    return 0
+                } else {
+                    println "Hotfix branch versioning is invalid in comparison to master branch versioning. " +
+                            "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!\n" +
+                            "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "masterVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
 
             } else if (targetBranchType == "dev") {
+
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
+                boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
+
+                if (major && minor && patch) {
+                    return 0
+                } else {
+                    println "Hotfix branch versioning is invalid in comparison to dev branch versioning. " +
+                            "Major and minor version must be equal and patch version must be 0" +
+                            "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "devVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
 
             } else {
                 // invalid branch type for hotfix merge
@@ -376,8 +437,8 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
         case "feature":
             if (targetBranchType == "dev") {
                 // no change in semVer allowed
-                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
-                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean major = sourceBranchVersion[0].toInteger() == targetBranchVersion[0].toInteger()
+                boolean minor = sourceBranchVersion[1].toInteger() == targetBranchVersion[1].toInteger()
                 boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
 
                 if (major && minor && patch) {
