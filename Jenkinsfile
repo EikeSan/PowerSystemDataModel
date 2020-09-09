@@ -30,7 +30,7 @@ String rocketChatChannel = 'jenkins'
  */
 
 /* setup pipeline properties */
-// dev and master need manual deploy capabilities
+// dev and main need manual deploy capabilities
 if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
     constantBranchesProps()
 } else {
@@ -76,7 +76,7 @@ node {
                     if (checkVersion(currentBranchName, targetBranchName, projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
                         error "Version check failed! See log for version differences."
                 } else if (targetBranchName == null) {
-                    // if this branch is the dev branch, we can still do version check to compare if dev and master have the same semnatic version
+                    // if this branch is the dev branch, we can still do version check to compare if dev and main have the same semnatic version
                     if (env.BRANCH_NAME == "dev") {
                         if (checkVersion(currentBranchName, "main", projectName, projectName, gitCheckoutUrl, sshCredentialsId) != 0)
                             error "Version check failed! See log for version differences."
@@ -131,7 +131,7 @@ node {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
                 }
 
-                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
+                // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                 // if manually triggered for deploy, no PR should be created
                 if (env.BRANCH_NAME == "main" && params.deploy != "true") {
 
@@ -236,10 +236,10 @@ def gradle(String command, String relativeProjectDir) {
 def determineSonarqubeGradleCmd(String sonarqubeProjectKey, String orgName, String projectName) {
     switch (env.BRANCH_NAME) {
         case "main":
-            return "sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey"
+            return "sonarqube -Dsonar.branch.name=main -Dsonar.projectKey=$sonarqubeProjectKey"
             break
         case "dev":
-            return "sonarqube -Dsonar.branch.name=master -Dsonar.projectKey=$sonarqubeProjectKey"
+            return "sonarqube -Dsonar.branch.name=main -Dsonar.projectKey=$sonarqubeProjectKey"
             break
         default:
             String gradleCommand = "sonarqube -Dsonar.projectKey=$sonarqubeProjectKey"
@@ -250,7 +250,7 @@ def determineSonarqubeGradleCmd(String sonarqubeProjectKey, String orgName, Stri
             } else {
                 // PR exists, adapt cmd accordingly
                 return gradleCommand + " -Dsonar.pullrequest.branch=${env.BRANCH_NAME} -Dsonar.pullrequest.key=${env.CHANGE_ID} " +
-                        "-Dsonar.pullrequest.base=master -Dsonar.pullrequest.github.repository=${orgName}/${projectName} " +
+                        "-Dsonar.pullrequest.base=main -Dsonar.pullrequest.github.repository=${orgName}/${projectName} " +
                         "-Dsonar.pullrequest.provider=Github"
             }
             break
@@ -391,10 +391,10 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 if (major && minor && patch) {
                     return 0
                 } else {
-                    println "Hotfix branch versioning is invalid in comparison to master branch versioning. " +
-                            "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!\n" +
+                    println "Hotfix branch versioning is invalid in comparison to main branch versioning. " +
+                            "Only mainBranch.patchVersion + 1 is allowed for hotfix branch!\n" +
                             "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
-                            "masterVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                            "mainVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
                     return -1
                 }
 
