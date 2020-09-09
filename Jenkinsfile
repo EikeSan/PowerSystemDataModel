@@ -61,6 +61,14 @@ node {
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
 
+            // checkout scm
+            String commitHash = ""
+            stage('checkout') {
+                // commit hash from scm checkout
+                // https://www.theserverside.com/blog/Coffee-Talk-Java-News-Stories-and-Opinions/Complete-Jenkins-Git-environment-variables-list-for-batch-jobs-and-shell-script-builds
+                commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
+            }
+
             stage('def') {
                 // todo this should be in post processing
                 // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
@@ -98,14 +106,6 @@ node {
 
                     }
                 }
-            }
-
-            // checkout scm
-            String commitHash = ""
-            stage('checkout') {
-                // commit hash from scm checkout
-                // https://www.theserverside.com/blog/Coffee-Talk-Java-News-Stories-and-Opinions/Complete-Jenkins-Git-environment-variables-list-for-batch-jobs-and-shell-script-builds
-                commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
             }
 
             // version check
