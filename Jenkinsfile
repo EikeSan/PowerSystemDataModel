@@ -96,7 +96,7 @@ node {
 
 
                     // create new branch with same name as before + hand in a pull request for dev branch
-                    withCredentials([sshUserNamePrivateKey(credentialsId: sshCredentialsId, variable: 'sshKey')]) {
+                    withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, variable: 'sshKey')]) {
                         sh(script: "cd $projectName && " +
                                 "ssh-agent bash -c \"ssh-add $sshKey; " +
                                 "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
