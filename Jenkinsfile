@@ -9,7 +9,7 @@ String javaVersionId = 'jdk-8' // id that matches the java tool with the java ve
 
 /* git configuration */
 String projectName = 'PowerSystemDataModel' // name of the repository, is case insensitive
-String orgName = 'ie3-institute' // name of the github organization
+String orgName = 'johanneshiry' // name of the github organization
 String gitCheckoutUrl = "git@github.com:$orgName/${projectName}.git"
 String sshCredentialsId = '19f16959-8a0d-4a60-bd1f-5adb4572b702' // id that matches the ssh credentials to interact with the git set as jenkins property
 
@@ -48,8 +48,6 @@ node {
             // set java version
             setJavaVersion(javaVersionId)
 
-            echo sh(returnStdout: true, script: 'env')
-
             // set build display name
             currentBuild.displayName = determineDisplayName()
 
@@ -60,6 +58,7 @@ node {
             // determine branch name that should be checked out
             String currentBranchName = determineBranchName(orgName, projectName)
             String targetBranchName = determineTargetBranchName(orgName, projectName)
+            String branchType = getBranchType(currentBranchName)
 
             // checkout csm
             String commitHash = ""
@@ -86,6 +85,21 @@ node {
                 } else {
                     error "Target branch name '$targetBranchName' for merging is not supported! Please select either 'dev' or 'main' as " +
                             "target branch for merging!"
+                }
+            }
+
+            if(branchType == "hotfix" || branchType == "release"){
+                // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
+                stage('handle dev PR'){
+                    // only create draft PR if a PR has been handed in already, otherwise skip this step
+                    if (env.CHANGE_ID != null) {
+
+
+
+
+                    } else{
+                        println "No PR for branch handed in yet. Not going to create a draft PR for dev branch!"
+                    }
                 }
             }
 
@@ -129,6 +143,11 @@ node {
                 // call codecov.io
                 withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
+                }
+
+                // if this has been a merge of a hotfix or a release additional steps needs to be carried out
+                if(env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev"){
+
                 }
 
                 // notify Rocket.Chat
