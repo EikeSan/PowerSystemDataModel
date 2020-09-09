@@ -115,16 +115,16 @@ node {
 
                             // no dev PR exists, create one
                             withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
-//                                String curlCmd = "set +x && " +
-//                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-//                                        "https://api.github.com/repos/$orgName/$projectName/pulls" +
-//                                        "-d \"{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}\""
+                                String curlCmd = "set +x && " +
+                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
+                                        " -d \"{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}\""
 
-                                String curlCmd = "curl -X POST  \\\n" +
-                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
-                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
-                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
-                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
+//                                String curlCmd = "curl -X POST  \\\n" +
+//                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
+//                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
+//                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
+//                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
                                 println(sh(script: curlCmd, returnStdout: true))
                             }
 
