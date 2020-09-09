@@ -69,65 +69,6 @@ node {
                 commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
             }
 
-            stage('def') {
-                // todo this should be in post processing
-                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
-                // if manually triggered for deploy, no PR should be created
-
-//
-//                String a = "Merge: f3e96145 151c0270"
-//
-//                a.split("\\s")
-//
-//                println(a.split("\\s")[2])
-
-
-                if (env.BRANCH_NAME == "main" && params.deploy != "true") {
-
-                    String gitLogLatestMergeString = sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true).toString()
-                    String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
-
-//                    for(i in gitLogLatestMerge){
-//                        println(i)
-//                    }
-
-
-                    String latestMergeCommitSHA = gitLogLatestMerge[4]
-                    String latestMergeBranchName = gitLogLatestMerge[37]
-
-
-                    // create new branch with same name as before + hand in a pull request for dev branch,
-                    // if the branch already exists catch the exception because then we can just go on for a PR
-                    try {
-                        withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
-                            sh(script: "cd $projectName && " +
-                                    "ssh-agent bash -c \"ssh-add $sshKey; " +
-                                    "git branch | grep -v \"main\" | xargs git branch -D;"+ // deletes all branches except main
-                                    "git fetch && git checkout $currentBranchName && git pull && " +
-                                    "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
-                                    "git push --set-upstream origin $latestMergeBranchName\"")
-
-                        }
-                    } catch (Exception e) {
-                        println "No need to create a new branch. Can reuse old one."
-                    }
-
-                    // create PR on dev branch
-                    withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
-                        String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
-                        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\\n" +
-                                "Please review, adapt and merge it into `dev`.\\nResolves $issueId."
-                        String curlCmd = "set +x && " +
-                                "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-                                " https://api.github.com/repos/$orgName/$projectName/pulls" +
-                                " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
-                                "\"draft\":\"true\"}'"
-                        println curlCmd
-                        println(sh(script: curlCmd, returnStdout: true))
-                    }
-                }
-            }
-
             // version check
             stage('version check') {
                 // version check can only be executed, if target branch is known (derived from a PR)
@@ -147,57 +88,6 @@ node {
                             "target branch for merging!"
                 }
             }
-
-//            if (branchType == "hotfix" || branchType == "release") {
-//                // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
-//                stage('handle dev PR') {
-//                    // only create draft PR if a PR has been handed in already, otherwise skip this step
-//                    if (prJsonObj != null) {
-//                        GString baseRefTargetRef = "dev,${prJsonObj.head.ref}"
-//
-//                        println baseRefTargetRef // todo remove debug
-//
-//                        // get all open pull requests
-//                        boolean devPRExists = false
-//                        net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
-//                        for (item in openPRsJsonObj.items) {
-//                            net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
-//                            if ("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef) {
-//                                // PR exists
-//                                devPRExists = true
-//                                break
-//                            }
-//                        }
-//
-//                        if (!devPRExists) {
-//                            println("i need to create a pr ...")
-//
-//                            // no dev PR exists, create one
-//                            withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
-//                                String curlCmd = "set +x && " +
-//                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-//                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
-//                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"$currentBranchName\", \"base\": \"dev\"," +
-//                                        "\"draft\":\"true\"}'"
-//
-//                                println curlCmd
-//
-////                                String curlCmd = "curl -X POST  \\\n" +
-////                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
-////                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
-////                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
-////                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
-//                                println(sh(script: curlCmd, returnStdout: true))
-//                            }
-//
-//
-//                        }
-//
-//                    } else {
-//                        println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
-//                    }
-//                }
-//            }
 
             // test the project
             stage('run tests') {
@@ -239,6 +129,47 @@ node {
                 // call codecov.io
                 withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
+                }
+
+                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
+                // if manually triggered for deploy, no PR should be created
+                if (env.BRANCH_NAME == "main" && params.deploy != "true") {
+
+                    String gitLogLatestMergeString = sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true).toString()
+                    String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
+
+                    String latestMergeCommitSHA = gitLogLatestMerge[4]
+                    String latestMergeBranchName = gitLogLatestMerge[37]
+
+
+                    // create new branch with same name as before + hand in a pull request for dev branch,
+                    // if the branch already exists catch the exception because then we can just go on for a PR
+                    try {
+                        withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+                            sh(script: "cd $projectName && set +x && " +
+                                    "ssh-agent bash -c \"ssh-add $sshKey; " +
+                                    "git branch | grep -v \"main\" | xargs git branch -D;"+ // deletes all branches except main
+                                    "git fetch && git checkout $currentBranchName && git pull && " +
+                                    "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
+                                    "git push --set-upstream origin $latestMergeBranchName\"")
+
+                        }
+                    } catch (Exception e) {
+                        println "No need to create a new branch. Can reuse old one."
+                    }
+
+                    // create PR on dev branch
+                    withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
+                        String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
+                        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\\n" +
+                                "Please review, adapt and merge it into `dev`.\\nResolves $issueId."
+                        String curlCmd = "set +x && " +
+                                "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                                " https://api.github.com/repos/$orgName/$projectName/pulls" +
+                                " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
+                                "\"draft\":\"true\"}'"
+                        sh(script: curlCmd, returnStdout: true)
+                    }
                 }
 
                 // notify Rocket.Chat
