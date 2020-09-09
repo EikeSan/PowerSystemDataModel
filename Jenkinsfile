@@ -102,7 +102,7 @@ node {
                         withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
                             sh(script: "cd $projectName && " +
                                     "ssh-agent bash -c \"ssh-add $sshKey; " +
-                                    "git branch | grep -v \"main\" | xargs git branch -D;"+
+                                    "git branch | grep -v \"main\" | xargs git branch -D;"+ // deletes all branches except main
                                     "git fetch && git checkout $currentBranchName && git pull && " +
                                     "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
                                     "git push --set-upstream origin $latestMergeBranchName\"")
@@ -110,6 +110,20 @@ node {
                         }
                     } catch (Exception e) {
                         println "No need to create a new branch. Can reuse old one."
+                    }
+
+                    // create PR on dev branch
+                    withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
+                        String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
+                        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`." +
+                                "Resolves $issueId. Please review, adapt and merge it into `dev`."
+                        String curlCmd = "set +x && " +
+                                "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                                " https://api.github.com/repos/$orgName/$projectName/pulls" +
+                                " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
+                                "\"draft\":\"true\"}'"
+                        println curlCmd
+                        println(sh(script: curlCmd, returnStdout: true))
                     }
                 }
             }
