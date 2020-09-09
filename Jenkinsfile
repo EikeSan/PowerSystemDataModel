@@ -61,13 +61,22 @@ node {
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
 
-            stage('def'){
+            stage('def') {
                 // todo this should be in post processing
                 // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
                 // if manually triggered for deploy, no PR should be created
 
+//
+//                String a = "Merge: f3e96145 151c0270"
+//
+//                a.split("\\s")
+//
+//                println(a.split("\\s")[2])
+
+
                 if (env.BRANCH_NAME == "main" && params.deploy != "true") {
-                    println(sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true))
+                    String latestMergeCommitSHA = sh(script: """cd $projectName""" + ''' && git log --merges -n 1 | grep Merge:''', returnStdout: true).toString().split("\\s")[2]
+                    println latestMergeCommitSHA
                 }
             }
 
@@ -386,7 +395,7 @@ def checkVersion(String branchName, String targetBranchName, String relativeGitD
     String[] currentVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
 
     /// switch to the comparison branch
-    gitCheckout(projectName, gitCheckoutUrl, targetBranchName, sshCredentialsId)
+    gitCheckout(projectName, gitCheckoutUrl, targetBranchName, sshCredentialsId) // todo maybe simplify by raw git call
     String[] targetBranchVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
 
     if (compareVersionParts(branchType, currentVersion, getBranchType(targetBranchName), targetBranchVersion) != 0) {
@@ -394,7 +403,7 @@ def checkVersion(String branchName, String targetBranchName, String relativeGitD
         return -1
     } else {
         // switch back to current branch
-        gitCheckout(projectName, gitCheckoutUrl, branchName, sshCredentialsId)
+        gitCheckout(projectName, gitCheckoutUrl, branchName, sshCredentialsId) // todo maybe simplify by raw git call
         return 0
     }
 }
