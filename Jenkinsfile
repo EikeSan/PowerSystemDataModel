@@ -182,9 +182,10 @@ node {
                     sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
                 }
 
-                // if this has been a merge of a hotfix or a release additional steps needs to be carried out
-                if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
-
+                // normally master pipeline is only triggered by merge of release or hotfixes OR manually triggered
+                // if manually triggered for deploy, no PR should be created
+                if (env.BRANCH_NAME == "main" && params.deploy == "false") {
+                    println(sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true))
                 }
 
                 // notify Rocket.Chat
