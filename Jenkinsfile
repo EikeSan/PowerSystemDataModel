@@ -360,7 +360,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
             if (targetBranchType == "main") {
                 boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
                 boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
-                boolean patch = (sourceBranchVersion[2].toInteger() + 1 && targetBranchVersion[2].toInteger())
+                boolean patch = (sourceBranchVersion[2].toInteger() + 1 == targetBranchVersion[2].toInteger())
 
                 if (major && minor && patch) {
                     return 0
