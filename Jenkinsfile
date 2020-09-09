@@ -95,13 +95,18 @@ node {
                     String latestMergeBranchName = gitLogLatestMerge[37]
 
 
-                    // create new branch with same name as before + hand in a pull request for dev branch
-                    withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
-                        sh(script: "cd $projectName && " +
-                                "ssh-agent bash -c \"ssh-add $sshKey; " +
-                                "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
-                                "git push --set-upstream origin $latestMergeBranchName\"")
+                    // create new branch with same name as before + hand in a pull request for dev branch,
+                    // if the branch already exists catch the exception because then we can just go on for a PR
+                    try {
+                        withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+                            sh(script: "cd $projectName && " +
+                                    "ssh-agent bash -c \"ssh-add $sshKey; " +
+                                    "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
+                                    "git push --set-upstream origin $latestMergeBranchName\"")
 
+                        }
+                    } catch (Exception e) {
+                        println "No need to create a new branch. Can reuse old one."
                     }
                 }
             }
