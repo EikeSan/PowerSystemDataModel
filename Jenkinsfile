@@ -114,7 +114,7 @@ node {
                             println("i need to create a pr ...")
 
                             // no dev PR exists, create one
-                            withCredentials([string(credentialsId: SimServCIDeveloperAccessTokenForWebhooks, variable: 'SimServCIToken')]) {
+                            withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
                                 String curlCmd = "set +x && " +
                                         "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
                                         "https://api.github.com/repos/$orgName/$projectName/pulls" +
