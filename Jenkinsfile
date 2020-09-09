@@ -101,19 +101,30 @@ node {
                         // get all open pull requests
                         boolean devPRExists = false
                         net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
-                        for(item in openPRsJsonObj.items){
+                        for (item in openPRsJsonObj.items) {
                             net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
-                            if("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef){
+                            if ("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef) {
                                 // PR exists
                                 devPRExists = true
                                 break
                             }
                         }
 
-                        if(!devPRExists){
+                        if (!devPRExists) {
                             println("i need to create a pr ...")
-                        }
 
+                            // no dev PR exists, create one
+                            withCredentials([string(credentialsId: SimServCIDeveloperAccessTokenForWebhooks, variable: 'SimServCIToken')]) {
+                                String curlCmd = "set +x && " +
+                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                                        "https://api.github.com/repos/$orgName/$projectName/pulls" +
+                                        "-d { \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}"
+
+                                println(sh(script: curlCmd, returnStdout: true))
+                            }
+
+
+                        }
 
                     } else {
                         println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
