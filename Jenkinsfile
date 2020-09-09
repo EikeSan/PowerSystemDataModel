@@ -105,7 +105,7 @@ node {
                             net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
                             if("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef){
                                 // PR exists
-                                devPRExists = true;
+                                devPRExists = true
                                 break
                             }
                         }
@@ -327,13 +327,13 @@ def getGithubPRJsonObj(String prId, String orgName, String repoName) {
 }
 
 def curlByPR(String prId, String orgName, String repoName) {
-    def curlUrl = "curl -s https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
+    def curlUrl = "set +x && curl -s https://api.github.com/repos/" + orgName + "/" + repoName + "/pulls/" + prId
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
     return jsonResponseString
 }
 
 def curlOpenPRs(String orgName, String repoName) {
-    String curlUrl = "curl -s https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
+    String curlUrl = "set +x && curl -s https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
     def jsonObj = readJSON text: sh(script: curlUrl, returnStdout: true)
     return jsonObj
 }
