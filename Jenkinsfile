@@ -80,8 +80,13 @@ node {
                     String latestMergeBranchName = gitLogLatestMerge[37]
 
                     // create new branch with same name as before + hand in a pull request for dev branch
-                    sh(script: "cd $projectName && git checkout -b $latestMergeBranchName $latestMergeCommitSHA && git push --set-upstream origin $latestMergeBranchName")
+                    withCredentials([string(credentialsId: sshCredentialsId, variable: 'sshKey')]) {
+                        sh(script: "cd $projectName && " +
+                                "ssh-agent bash -c \"ssh-add $sshKey; " +
+                                "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
+                                "git push --set-upstream origin $latestMergeBranchName\"")
 
+                    }
                 }
             }
 
@@ -113,56 +118,56 @@ node {
                 }
             }
 
-            if (branchType == "hotfix" || branchType == "release") {
-                // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
-                stage('handle dev PR') {
-                    // only create draft PR if a PR has been handed in already, otherwise skip this step
-                    if (prJsonObj != null) {
-                        GString baseRefTargetRef = "dev,${prJsonObj.head.ref}"
-
-                        println baseRefTargetRef // todo remove debug
-
-                        // get all open pull requests
-                        boolean devPRExists = false
-                        net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
-                        for (item in openPRsJsonObj.items) {
-                            net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
-                            if ("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef) {
-                                // PR exists
-                                devPRExists = true
-                                break
-                            }
-                        }
-
-                        if (!devPRExists) {
-                            println("i need to create a pr ...")
-
-                            // no dev PR exists, create one
-                            withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
-                                String curlCmd = "set +x && " +
-                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
-                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"$currentBranchName\", \"base\": \"dev\"," +
-                                        "\"draft\":\"true\"}'"
-
-                                println curlCmd
-
-//                                String curlCmd = "curl -X POST  \\\n" +
-//                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
-//                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
-//                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
-//                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
-                                println(sh(script: curlCmd, returnStdout: true))
-                            }
-
-
-                        }
-
-                    } else {
-                        println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
-                    }
-                }
-            }
+//            if (branchType == "hotfix" || branchType == "release") {
+//                // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
+//                stage('handle dev PR') {
+//                    // only create draft PR if a PR has been handed in already, otherwise skip this step
+//                    if (prJsonObj != null) {
+//                        GString baseRefTargetRef = "dev,${prJsonObj.head.ref}"
+//
+//                        println baseRefTargetRef // todo remove debug
+//
+//                        // get all open pull requests
+//                        boolean devPRExists = false
+//                        net.sf.json.JSONObject openPRsJsonObj = curlOpenPRs(orgName, projectName)
+//                        for (item in openPRsJsonObj.items) {
+//                            net.sf.json.JSONObject prObject = getPRJsonObj(orgName, projectName, "${item.number}")
+//                            if ("${prObject.base.ref},${prObject.head.ref}" == baseRefTargetRef) {
+//                                // PR exists
+//                                devPRExists = true
+//                                break
+//                            }
+//                        }
+//
+//                        if (!devPRExists) {
+//                            println("i need to create a pr ...")
+//
+//                            // no dev PR exists, create one
+//                            withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
+//                                String curlCmd = "set +x && " +
+//                                        "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+//                                        " https://api.github.com/repos/$orgName/$projectName/pulls" +
+//                                        " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"$currentBranchName\", \"base\": \"dev\"," +
+//                                        "\"draft\":\"true\"}'"
+//
+//                                println curlCmd
+//
+////                                String curlCmd = "curl -X POST  \\\n" +
+////                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
+////                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
+////                                        "  https://api.github.com/repos/johanneshiry/asdasd/pulls \\\n" +
+////                                        "  -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
+//                                println(sh(script: curlCmd, returnStdout: true))
+//                            }
+//
+//
+//                        }
+//
+//                    } else {
+//                        println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
+//                    }
+//                }
+//            }
 
             // test the project
             stage('run tests') {
