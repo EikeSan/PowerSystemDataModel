@@ -324,7 +324,7 @@ def curlByPR(String prId, String orgName, String repoName) {
 }
 
 def curlOpenPRs(String orgName, String repoName) {
-    String curlUrl = "https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
+    String curlUrl = "curl https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
     def jsonObj = readJSON text: sh(script: curlUrl, returnStdout: true)
 }
 
