@@ -56,7 +56,7 @@ node {
             notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
 
             // determine branch name that should be checked out
-            JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
             String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
             String branchType = getBranchType(currentBranchName)
