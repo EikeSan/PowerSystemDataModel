@@ -169,7 +169,7 @@ node {
             println("[ERROR] [${date.format("dd/MM/yyyy")} - ${date.format("HH:mm:ss")}] " + e)
 
             // notify rocket chat
-            JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
+            net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
             String branchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String errorMsg = "CI failed.\n" +
                     "*project:* ${projectName}\n" +
