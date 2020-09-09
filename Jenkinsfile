@@ -89,9 +89,9 @@ node {
                 }
             }
 
-            if(branchType == "hotfix" || branchType == "release"){
+            if (branchType == "hotfix" || branchType == "release") {
                 // release and hotfix branches needs a merge into dev as well, automatically create a draft PR to dev as well
-                stage('handle dev PR'){
+                stage('handle dev PR') {
                     // only create draft PR if a PR has been handed in already, otherwise skip this step
                     if (prJsonObj != null) {
                         String baseRefTargetRef = "${prJsonObj.base.ref},${prJsonObj.head.ref}"
@@ -99,7 +99,7 @@ node {
                         println baseRefTargetRef
 
 
-                    } else{
+                    } else {
                         println "No PR for main branch handed in yet. Not going to create a draft PR for dev branch!"
                     }
                 }
@@ -148,7 +148,7 @@ node {
                 }
 
                 // if this has been a merge of a hotfix or a release additional steps needs to be carried out
-                if(env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev"){
+                if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
 
                 }
 
@@ -317,7 +317,7 @@ def curlByPR(String prId, String orgName, String repoName) {
 }
 
 
-def getPRJsonObj(String orgName, String projectName, String changeId){
+def getPRJsonObj(String orgName, String projectName, String changeId) {
     if (changeId == null) {
         return null
     } else {
@@ -325,13 +325,6 @@ def getPRJsonObj(String orgName, String projectName, String changeId){
         return getGithubPRJsonObj(changeId, orgName, projectName)
     }
 }
-
-
-
-
-
-
-
 
 
 def checkVersion(String branchName, String targetBranchName, String relativeGitDir, String projectName, String gitCheckoutUrl, String sshCredentialsId) {
@@ -365,8 +358,35 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
     switch (sourceBranchType) {
         case "hotfix":
             if (targetBranchType == "main") {
+                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
+                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean patch = (sourceBranchVersion[2].toInteger() + 1 && targetBranchVersion[2].toInteger())
+
+                if (major && minor && patch) {
+                    return 0
+                } else {
+                    println "Hotfix branch versioning is invalid in comparison to master branch versioning." +
+                            "Only masterBranch.patchVersion + 1 is allowed for hotfix branch!" +
+                            "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "masterVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
 
             } else if (targetBranchType == "dev") {
+
+                boolean major = sourceBranchVersion[0] == targetBranchVersion[0]
+                boolean minor = sourceBranchVersion[1] == targetBranchVersion[1]
+                boolean patch = (sourceBranchVersion[2].toInteger() == 0 && targetBranchVersion[2].toInteger() == 0)
+
+                if (major && minor && patch) {
+                    return 0
+                } else {
+                    println "Hotfix branch versioning is invalid in comparison to dev branch versioning." +
+                            "Major and minor version must be equal and patch version must be 0" +
+                            "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "devVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
 
             } else {
                 // invalid branch type for hotfix merge
