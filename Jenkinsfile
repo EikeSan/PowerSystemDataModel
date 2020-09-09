@@ -120,6 +120,8 @@ node {
                                         " https://api.github.com/repos/$orgName/$projectName/pulls"
                                         " -d '{ \"title\": \"hotfix-2 for dev\", \"body\": \"Please pull this in!\", \"head\": \"hotfix-2\", \"base\": \"dev\"}'"
 
+                                println curlCmd
+
 //                                String curlCmd = "curl -X POST  \\\n" +
 //                                        "  -u johanneshiry:6802a2e88bff8ca95744d5ad2b8af2f705be7fe9 \\\n" +
 //                                        "  -H \"Accept: application/vnd.github.v3+json\" \\\n" +
