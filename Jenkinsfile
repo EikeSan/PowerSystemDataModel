@@ -76,8 +76,8 @@ node {
 
                 if (env.BRANCH_NAME == "main" && params.deploy != "true") {
                     String[] gitLogLatestMerge = sh(script: """cd $projectName""" + ''' && git log --merges -n 1''', returnStdout: true).toString().split("\\s")
-                    String latestMergeCommitSHA = gitLogLatestMerge[5]
-                    String latestMergeBranchName = gitLogLatestMerge[38]
+                    String latestMergeCommitSHA = gitLogLatestMerge[4]
+                    String latestMergeBranchName = gitLogLatestMerge[37]
 
                    for(i in gitLogLatestMerge){
                        println(i)
