@@ -115,8 +115,8 @@ node {
                     // create PR on dev branch
                     withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
                         String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
-                        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\n" +
-                                "Please review, adapt and merge it into `dev`.\nResolves $issueId."
+                        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`." +
+                                "Resolves $issueId. Please review, adapt and merge it into `dev`."
                         String curlCmd = "set +x && " +
                                 "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
                                 " https://api.github.com/repos/$orgName/$projectName/pulls" +
