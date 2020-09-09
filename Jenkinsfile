@@ -79,8 +79,8 @@ node {
                     String latestMergeCommitSHA = gitLogLatestMerge[4]
                     String latestMergeBranchName = gitLogLatestMerge[37]
 
-                    println(latestMergeCommitSHA)
-                    println(latestMergeBranchName)
+                    // create new branch with same name as before + hand in a pull request for dev branch
+                    sh(script: "cd $projectName && git checkout -b $latestMergeBranchName $latestMergeCommitSHA && git push --set-upstream origin $latestMergeBranchName")
 
                 }
             }
