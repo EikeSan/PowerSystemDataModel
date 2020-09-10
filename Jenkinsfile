@@ -311,7 +311,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                         "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
                         "git fetch && git checkout $tagBranchName && git pull && " +
                         "git tag -d $projectVersion && " + // todo JH remove
-                        "git tag $projectVersion -m Release version $projectVersion. && " +
+                        "git tag $projectVersion -m 'Release version $projectVersion.' && " +
                         "git push origin --tags" +
                         "\"", returnStdout: false)
     }
