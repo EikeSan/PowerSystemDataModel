@@ -303,7 +303,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
     String projectVersion =
             sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion").trim()
 
-    println  "set +x && cd $projectName && " +
+    println "set +x && cd $projectName && " +
             "ssh-agent bash -c \"set +x && ssh-add sshKey; " +
             "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
             "git fetch && git checkout $tagBranchName && git pull && " +
@@ -315,20 +315,24 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
             "\""
 
     withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+        // set tagging mail and name
+        sh(script: "set +x && cd $projectName && " +
+                "git config user.email 'johannes.hiry@tu-dortmund.de' && " +
+                "git config user.name 'Johannes Hiry'", returnStdout: false)
+
         // cleanup to prepare repo
-       println( sh(script:
-                "cd $projectName && " +
-                        "ssh-agent bash -c \"ssh-add $sshKey; " + // todo add set +x
+        sh(script:
+                "set +x && cd $projectName && " +
+                        "ssh-agent bash -c \"set +x && ssh-add $sshKey; " + // todo add set +x
                         "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
                         "git fetch && git checkout $tagBranchName && git pull && " +
-                        "git tag -d $projectVersion && " + // todo JH remove
+//                        "git tag -d $projectVersion && " + // todo JH remove
 //                        "git config user.email \"johannes.hiry@tu-dortmund.de\" && " +
 //                        "git config user.name \"Johannes Hiry\" && "+
                         "git tag -m 'Release version $projectVersion.' $projectVersion && " +
                         "git push origin --tags" +
-                        "\"", returnStdout: true))
+                        "\"", returnStdout: false)
     }
-
 
 
 }
