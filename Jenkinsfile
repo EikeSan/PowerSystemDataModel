@@ -561,12 +561,13 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
 
                 // patch version always needs to be 0
-                boolean patchValid = sourceBranchVersion[2] == 0
+                boolean patchValid = sourceBranchVersion[2].toInteger() == 0
 
                 if ((validCheck1 || validCheck2) && patchValid) {
                     return 0
                 } else {
-                    println "Release branch versioning does not fit to main branch versioning!\n" +
+                    println "Release branch versioning does not fit to main branch versioning!\nA release should increase " +
+                            "either major or minor version and reset patch version to 0." +
                             "releaseVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
                             "mainVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
                     return -1
@@ -593,7 +594,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
 
                 // patch version always needs to be 0
-                boolean patchValid = sourceBranchVersion[2] == 0
+                boolean patchValid = sourceBranchVersion[2].toInteger() == 0
 
                 if ((validCheck1 || validCheck2) && patchValid) {
                     return 0
