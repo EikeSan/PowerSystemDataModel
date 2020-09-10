@@ -70,6 +70,7 @@ node {
             }
 
             if (currentBranchName == "main") {
+                createAndPushTagOnMain(projectName)
                 stage('handle dev pr') {
                     // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                     // if manually triggered for deploy, no PR should be created
@@ -146,7 +147,10 @@ node {
 
                     }
 
-                    if(env.BRANCH_NAME == "main"){
+                    if (env.BRANCH_NAME == "main") {
+                        // create tag on main and push it to origin
+                        createAndPushTagOnMain(projectName)
+
                         // todo JH create github release
                     }
 
@@ -291,6 +295,26 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
         // switch back to main branch for further processing
         sh(script: "set +x && cd $projectName && git checkout $currentBranchName")
     }
+}
+
+def createAndPushTagOnMain(String projectName) {
+    String tagBranchName = 'main'
+
+    String projectVersion =
+            sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion")
+
+    withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+        // cleanup to prepare repo
+        sh(script:
+                "set +x && cd $projectName && " +
+                        "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
+                        "git branch | grep -v \"$tagBranchName\" | xargs git branch -D;" + // deletes all local branches except tagBranchName
+                        "git fetch && git checkout $tagBranchName && git pull" +
+                        "git tag $projectVersion -a \"Release version $projectVersion.\" &&" +
+                        "git push origin --tags" +
+                        "\"", returnStdout: false)
+    }
+
 }
 
 /* gradle */
