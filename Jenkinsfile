@@ -69,7 +69,7 @@ node {
                 commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
             }
 
-            if (currentBranchName = "main") {
+            if (currentBranchName == "main") {
                 stage('handle dev pr') {
                     // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                     // if manually triggered for deploy, no PR should be created
