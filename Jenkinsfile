@@ -304,7 +304,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
             sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion")
 
     println  "set +x && cd $projectName && " +
-            "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
+            "ssh-agent bash -c \"set +x && ssh-add sshKey; " +
             "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
             "git fetch && git checkout $tagBranchName && git pull && " +
 //                        "git tag -d $projectVersion && " + // todo JH remove
