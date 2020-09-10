@@ -369,7 +369,7 @@ def determineDisplayName(String currentBranchName, String commitHash, String org
         // main and dev are always merge branches
 
         def jsonObject = getGithubCommitJsonObj(commitHash, orgName, projectName)
-        featureBranchName = splitStringToBranchName(jsonObject.commit.message)
+        String featureBranchName = splitStringToBranchName(jsonObject.commit.message)
 
         displayName = ((featureBranchName?.trim()) ? "merge pr branch '${featureBranchName}'" : "commit '" +
                 "${jsonObject.commit.message.length() <= 20 ? jsonObject.commit.message : jsonObject.commit.message.substring(0, 20)}...'") + " (" + currentBuild.displayName + ")"
