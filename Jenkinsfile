@@ -199,7 +199,7 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
     withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
         // cleanup to prepare repo
         sh(script:
-                "set +x cd $projectName && " +
+                "set +x && cd $projectName && " +
                         "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
                         "git branch | grep -v \"$currentBranchName\" | xargs git branch -D;" + // deletes all local branches except main
                         "git fetch && git checkout $currentBranchName && git pull\"", returnStdout: false)
