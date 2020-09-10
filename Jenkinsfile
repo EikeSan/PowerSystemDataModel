@@ -51,15 +51,13 @@ node {
             // set build display name
             currentBuild.displayName = determineDisplayName()
 
-            // notify rocket chat
-            String startPipelineMsg = buildStartMsg()
-            notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
-
             // determine branch name that should be checked out
             net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
             String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
-//            String branchType = getBranchType(currentBranchName) // todo JH maybe remove?!
+
+            // notify rocket chat
+            notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', buildStartMsg(currentBranchName, targetBranchName, projectName))
 
             // checkout scm
             String commitHash = ""
@@ -326,7 +324,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                             "git push origin --tags" +
                             "\"", returnStdout: false)
         }
-    } catch(Exception e){
+    } catch (Exception e) {
         println "Error when creating tag on main branch! Exception: $e"
     }
 }
@@ -399,14 +397,14 @@ def notifyRocketChat(String rocketChatChannel, String emoji, String message) {
     rawMessage: true
 }
 
-def buildSuccessMsg() {
-    // todo JH
-    return "dummySuccessMsg"
-}
+def buildStartMsg(String currentBranchName, String targetBranchName, String projectName) {
 
-def buildStartMsg() {
-    // todo JH
-    return "dummyStartMsg"
+    String msg = "Build of branch $currentBranchName triggered.\n" +
+            "*project:* ${projectName}\n" +
+            "*branch:* ${currentBranchName}\n" +
+            targetBranchName != null ? "*target:* ${targetBranchName}" : ""
+
+    return msg
 }
 
 /**
