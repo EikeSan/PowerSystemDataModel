@@ -561,7 +561,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
 
                 // patch version always needs to be 0
-                boolean patchValid = sourceBranchVersion[2] == 0
+                boolean patchValid = sourceBranchVersion[2].toInteger() == 0
 
                 if ((validCheck1 || validCheck2) && patchValid) {
                     return 0
@@ -592,14 +592,8 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 boolean validCheck1 = targetMajor == sourceMajor && targetMinor + 1 == sourceMinor
                 boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
 
-                println validCheck2
-                println validCheck1
-
-
                 // patch version always needs to be 0
-                boolean patchValid = sourceBranchVersion[2] == 0
-
-                println patchValid
+                boolean patchValid = sourceBranchVersion[2].toInteger() == 0
 
                 if ((validCheck1 || validCheck2) && patchValid) {
                     return 0
