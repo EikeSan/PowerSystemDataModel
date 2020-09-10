@@ -303,6 +303,17 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
     String projectVersion =
             sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion")
 
+    println  "set +x && cd $projectName && " +
+            "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
+            "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
+            "git fetch && git checkout $tagBranchName && git pull && " +
+//                        "git tag -d $projectVersion && " + // todo JH remove
+            "git config user.email \"johannes.hiry@tu-dortmund.de\" && " +
+            "git config user.name \"Johannes Hiry\" && "+
+            "git tag -m 'Release version $projectVersion.' $projectVersion && " +
+            "git push origin --tags" +
+            "\""
+
     withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
         // cleanup to prepare repo
         sh(script:
@@ -317,6 +328,8 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                         "git push origin --tags" +
                         "\"", returnStdout: false)
     }
+
+
 
 }
 
