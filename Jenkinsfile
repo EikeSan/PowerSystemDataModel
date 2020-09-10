@@ -367,12 +367,8 @@ def determineDisplayName(String currentBranchName, String commitHash, String org
     String displayName = ""
     if (currentBranchName == "main" || currentBranchName == "dev") {
         // main and dev are always merge branches
-
         def jsonObject = getGithubCommitJsonObj(commitHash, orgName, projectName)
-        String featureBranchName = splitStringToBranchName(jsonObject.commit.message)
-
-        displayName = ((featureBranchName?.trim()) ? "merge pr branch '${featureBranchName}'" : "commit '" +
-                "${jsonObject.commit.message.length() <= 20 ? jsonObject.commit.message : jsonObject.commit.message.substring(0, 20)}...'") + " (" + currentBuild.displayName + ")"
+        displayName = "${jsonObject.commit.message} (${currentBuild.displayName})"
     } else {
         displayName = currentBranchName + " (" + currentBuild.displayName + ")"
     }
@@ -647,12 +643,4 @@ def getBranchType(String branchName) {
     } else {
         return null
     }
-}
-
-def splitStringToBranchName(String string) {
-    def obj = string.split().find { it.startsWith("ie3-institute") }
-    if (obj)
-        return (obj as String).substring(14)
-    else
-        return ""
 }
