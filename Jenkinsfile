@@ -59,7 +59,7 @@ node {
             net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
             String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
-            String branchType = getBranchType(currentBranchName) // todo JH maybe remove?!
+//            String branchType = getBranchType(currentBranchName) // todo JH maybe remove?!
 
             // checkout scm
             String commitHash = ""
@@ -70,7 +70,6 @@ node {
             }
 
             if (currentBranchName == "main") {
-                createAndPushTagOnMain(projectName, sshCredentialsId) // todo JH remove
                 stage('handle dev pr') {
                     // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                     // if manually triggered for deploy, no PR should be created
@@ -102,27 +101,30 @@ node {
 
             // test the project
             stage('run tests') {
-                gradle('--refresh-dependencies clean spotlessCheck pmdMain pmdTest spotbugsMain ' +
-                        'spotbugsTest test jacocoTestReport jacocoTestCoverageVerification', projectName)
+                // todo JH enable
+//                gradle('--refresh-dependencies clean spotlessCheck pmdMain pmdTest spotbugsMain ' +
+//                        'spotbugsTest test jacocoTestReport jacocoTestCoverageVerification', projectName)
             }
 
             // sonarqube analysis
             stage('sonarqube analysis') {
-                String sonarqubeCmd = determineSonarqubeGradleCmd(sonarqubeProjectKey, orgName, projectName)
-                withSonarQubeEnv() { // will pick the global server connection from jenkins for sonarqube
-                    gradle(sonarqubeCmd, projectName)
-                }
+                // todo JH enable
+//                String sonarqubeCmd = determineSonarqubeGradleCmd(sonarqubeProjectKey, orgName, projectName)
+//                withSonarQubeEnv() { // will pick the global server connection from jenkins for sonarqube
+//                    gradle(sonarqubeCmd, projectName)
+//                }
             }
 
             // sonarqube quality gate
             stage("quality gate") {
-                timeout(time: 1, unit: 'HOURS') {
-                    // just in case something goes wrong, pipeline will be killed after a timeout
-                    def qg = waitForQualityGate() // reuse taskId previously collected by withSonarQubeEnv
-                    if (qg.status != 'OK') {
-                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                    }
-                }
+                // todo JH enable
+//                timeout(time: 1, unit: 'HOURS') {
+//                    // just in case something goes wrong, pipeline will be killed after a timeout
+//                    def qg = waitForQualityGate() // reuse taskId previously collected by withSonarQubeEnv
+//                    if (qg.status != 'OK') {
+//                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+//                    }
+//                }
             }
 
             // deploy stage only if branch is main or dev
@@ -143,7 +145,8 @@ node {
 
                         // see https://docs.gradle.org/6.0.1/release-notes.html "Publication of SHA256 and SHA512 checksums"
                         def preventSHACheckSums = "-Dorg.gradle.internal.publish.checksums.insecure=true"
-                        gradle("${deployGradleTasks} $preventSHACheckSums", projectName)
+//                        gradle("${deployGradleTasks} $preventSHACheckSums", projectName) // todo JH enable
+                        println deployGradleTasks // todo JH remove
 
                     }
 
@@ -170,17 +173,20 @@ node {
 
             // post processing
             stage('post processing') {
-                // publish reports
-                publishReports(projectName)
 
-                // call codecov.io
-                withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
-                    sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
-                }
+                // todo JH enable again
 
-                // notify Rocket.Chat
-                String successMsg = buildSuccessMsg()
-                notifyRocketChat(rocketChatChannel, ':jenkins_party:', successMsg)
+//                // publish reports
+//                publishReports(projectName)
+//
+//                // call codecov.io
+//                withCredentials([string(credentialsId: codeCovTokenId, variable: 'codeCovToken')]) {
+//                    sh "curl -s https://codecov.io/bash | bash -s - -t ${env.codeCovToken} -C ${commitHash}"
+//                }
+//
+//                // notify Rocket.Chat
+//                String successMsg = buildSuccessMsg()
+//                notifyRocketChat(rocketChatChannel, ':jenkins_party:', successMsg)
             }
 
         } catch (Exception e) {
@@ -303,38 +309,26 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
     String projectVersion =
             sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion").trim()
 
-    println "set +x && cd $projectName && " +
-            "ssh-agent bash -c \"set +x && ssh-add sshKey; " +
-            "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
-            "git fetch && git checkout $tagBranchName && git pull && " +
-//                        "git tag -d $projectVersion && " + // todo JH remove
-//            "git config user.email \"johannes.hiry@tu-dortmund.de\" && " +
-//            "git config user.name \"Johannes Hiry\" && "+
-            "git tag -m 'Release version $projectVersion.' $projectVersion && " +
-            "git push origin --tags" +
-            "\""
+    try {
+        withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+            // set tagging mail and name in git config
+            sh(script: "set +x && cd $projectName && " +
+                    "git config user.email 'johannes.hiry@tu-dortmund.de' && " +
+                    "git config user.name 'Johannes Hiry'", returnStdout: false)
 
-    withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
-        // set tagging mail and name
-        sh(script: "set +x && cd $projectName && " +
-                "git config user.email 'johannes.hiry@tu-dortmund.de' && " +
-                "git config user.name 'Johannes Hiry'", returnStdout: false)
-
-        // cleanup to prepare repo
-        sh(script:
-                "set +x && cd $projectName && " +
-                        "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
-                        "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
-                        "git fetch && git checkout $tagBranchName && git pull && " +
-//                        "git tag -d $projectVersion && " + // todo JH remove
-//                        "git config user.email \"johannes.hiry@tu-dortmund.de\" && " +
-//                        "git config user.name \"Johannes Hiry\" && "+
-                        "git tag -m 'Release version $projectVersion.' $projectVersion && " +
-                        "git push origin --tags" +
-                        "\"", returnStdout: false)
+            // cleanup repo and tag it afterwards
+            sh(script:
+                    "set +x && cd $projectName && " +
+                            "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
+                            "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
+                            "git fetch && git checkout $tagBranchName && git pull && " +
+                            "git tag -m 'Release version $projectVersion.' $projectVersion && " +
+                            "git push origin --tags" +
+                            "\"", returnStdout: false)
+        }
+    } catch(Exception e){
+        println "Error when creating tag on main branch! Exception: $e"
     }
-
-
 }
 
 /* gradle */
