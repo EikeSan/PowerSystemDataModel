@@ -515,7 +515,7 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                     return 0
                 } else {
                     println "Hotfix branch versioning is invalid in comparison to dev branch versioning. " +
-                            "Major and minor version must be equal and patch version must be 0" +
+                            "Major and minor version must be equal and patch version must be 0.\n" +
                             "hotfixVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
                             "devVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
                     return -1
