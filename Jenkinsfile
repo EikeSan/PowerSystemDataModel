@@ -70,7 +70,7 @@ node {
             }
 
             if (currentBranchName == "main") {
-                createAndPushTagOnMain(projectName)
+                createAndPushTagOnMain(projectName, sshCredentialsId) // todo JH remove
                 stage('handle dev pr') {
                     // normally main pipeline is only triggered by merge of release or hotfixes OR manually triggered
                     // if manually triggered for deploy, no PR should be created
@@ -149,7 +149,7 @@ node {
 
                     if (env.BRANCH_NAME == "main") {
                         // create tag on main and push it to origin
-                        createAndPushTagOnMain(projectName)
+                        createAndPushTagOnMain(projectName, sshCredentialsId)
 
                         // todo JH create github release
                     }
@@ -297,7 +297,7 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
     }
 }
 
-def createAndPushTagOnMain(String projectName) {
+def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
     String tagBranchName = 'main'
 
     String projectVersion =
