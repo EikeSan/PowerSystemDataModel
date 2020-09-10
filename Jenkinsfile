@@ -301,7 +301,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
     String tagBranchName = 'main'
 
     String projectVersion =
-            sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion")
+            sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion").trim()
 
     println  "set +x && cd $projectName && " +
             "ssh-agent bash -c \"set +x && ssh-add sshKey; " +
