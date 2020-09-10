@@ -237,7 +237,7 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
         String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\\n" +
                 "Please review, adapt and merge it into `dev`.\\nResolves $issueId."
         String curlCmd = "set +x && " +
-                "curl -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                "curl -s -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
                 " https://api.github.com/repos/$orgName/$projectName/pulls" +
                 " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
                 "\"draft\":\"true\"}'"
