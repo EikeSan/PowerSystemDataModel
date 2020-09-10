@@ -321,7 +321,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                         "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
                         "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
                         "git fetch && git checkout $tagBranchName && git pull && " +
-//                        "git tag -d $projectVersion && " + // todo JH remove
+                        "git tag -d $projectVersion && " + // todo JH remove
 //                        "git config user.email \"johannes.hiry@tu-dortmund.de\" && " +
 //                        "git config user.name \"Johannes Hiry\" && "+
                         "git tag -m 'Release version $projectVersion.' $projectVersion && " +
