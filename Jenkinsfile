@@ -208,44 +208,56 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
 
     }
 
-    // try to get hotfix first, if this fails try to get release
-    // TODO JH get release
-    String hotfixRegex = "hotfix/\\pL{2}/#\\d+.*"
-    String latestMergeBranchName = (gitLogLatestMergeString.find(hotfixRegex).trim() =~ hotfixRegex)[0]
+    // only create pr if the last merge has been a hotfix or a release branch merge
+    boolean isHotfix = gitLogLatestMergeString.find("Merge pull request .+ from .*hotfix/\\pL{2}/#\\d+.*") ? true : false
+    boolean isRelease = gitLogLatestMergeString.find("Merge pull request .+ from .*rel/\\pL{2}/#\\d+.*") ? true : false
 
-    // get the latest merge commit sha
-    String latestMergeCommitSHA = gitLogLatestMergeString.find("Merge: .* .*\n").trim().split(" ")[2]
+    if (isHotfix || isRelease) {
 
-    // create new branch with same name as before + hand in a pull request for dev branch,
-    // if the branch already exists catch the exception because then we can just go on for a PR
-    try {
-        withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
-            sh(script: "set +x && cd $projectName && " +
-                    "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
-                    "git fetch && git checkout $currentBranchName && git pull && " +
-                    "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
-                    "git push --set-upstream origin $latestMergeBranchName\"")
-
+        // try to get hotfix first, if this fails try to get release
+        String latestMergeBranchName = ""
+        if (isHotfix) {
+            String hotfixRegex = "hotfix/\\pL{2}/#\\d+.*"
+            latestMergeBranchName = (gitLogLatestMergeString.find(hotfixRegex).trim() =~ hotfixRegex)[0]
+        } else {
+            String relRegex = "rel/\\pL{2}/#\\d+.*"
+            latestMergeBranchName = (gitLogLatestMergeString.find(relRegex).trim() =~ relRegex)[0]
         }
-    } catch (Exception e) {
-        println "No need to create a new branch. Can reuse old one."
-    }
 
-    // create PR on dev branch
-    withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
-        String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
-        String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\\n" +
-                "Please review, adapt and merge it into `dev`.\\nResolves $issueId."
-        String curlCmd = "set +x && " +
-                "curl -s -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
-                " https://api.github.com/repos/$orgName/$projectName/pulls" +
-                " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
-                "\"draft\":\"true\"}'"
-        sh(script: curlCmd, returnStdout: true)
-    }
+        // get the latest merge commit sha
+        String latestMergeCommitSHA = gitLogLatestMergeString.find("Merge: .* .*\n").trim().split(" ")[2]
 
-    // switch back to main branch for further processing
-    sh(script: "set +x && cd $projectName && git checkout $currentBranchName")
+        // create new branch with same name as before + hand in a pull request for dev branch,
+        // if the branch already exists catch the exception because then we can just go on for a PR
+        try {
+            withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
+                sh(script: "set +x && cd $projectName && " +
+                        "ssh-agent bash -c \"set +x && ssh-add $sshKey; " +
+                        "git fetch && git checkout $currentBranchName && git pull && " +
+                        "git checkout -b $latestMergeBranchName $latestMergeCommitSHA && " +
+                        "git push --set-upstream origin $latestMergeBranchName\"")
+
+            }
+        } catch (Exception e) {
+            println "No need to create a new branch. Can reuse old one."
+        }
+
+        // create PR on dev branch
+        withCredentials([string(credentialsId: 'SimServCIDeveloperAccessTokenForWebhooks', variable: 'SimServCIToken')]) {
+            String issueId = (latestMergeBranchName =~ ".*(#\\d+).*")[0][1]
+            String prMessage = "CI generated PR for branch `$latestMergeBranchName` after merging it into `main`.\\n" +
+                    "Please review, adapt and merge it into `dev`.\\nResolves $issueId."
+            String curlCmd = "set +x && " +
+                    "curl -s -X POST -u johanneshiry:$SimServCIToken -H \"Accept: application/vnd.github.v3+json\"" +
+                    " https://api.github.com/repos/$orgName/$projectName/pulls" +
+                    " -d '{ \"title\": \"$latestMergeBranchName for dev\", \"body\": \"$prMessage\", \"head\": \"$latestMergeBranchName\", \"base\": \"dev\"," +
+                    "\"draft\":\"true\"}'"
+            sh(script: curlCmd, returnStdout: true)
+        }
+
+        // switch back to main branch for further processing
+        sh(script: "set +x && cd $projectName && git checkout $currentBranchName")
+    }
 }
 
 /* gradle */
