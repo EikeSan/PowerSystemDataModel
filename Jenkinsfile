@@ -210,13 +210,26 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
 
     println gitLogLatestMergeString
 
-    String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
+    // try to get hotfix first, if this fails try to get release
+    // TODO JH get release
+    String hotfixRegex = "hotfix/\\pL{2}/#\\d+.*"
+    String latestMergeBranchName = (gitLogLatestMergeString.find(hotfixRegex).trim() =~ hotfixRegex)[0]
 
-    for (i in gitLogLatestMerge)
-        println(i)
+    println latestMergeBranchName
 
-    String latestMergeCommitSHA = gitLogLatestMerge[4]
-    String latestMergeBranchName = gitLogLatestMerge[37].toLowerCase()
+
+    // get the latest merge commit sha
+    String latestMergeCommitSHA = gitLogLatestMergeString.find("Merge: .* .*\n").trim().split(" ")[2]
+
+    println latestMergeCommitSHA
+
+//    String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
+//
+//    for (i in gitLogLatestMerge)
+//        println(i)
+//
+//    String latestMergeCommitSHA = gitLogLatestMerge[4]
+//    String latestMergeBranchName = gitLogLatestMerge[37].toLowerCase()
 
     // create new branch with same name as before + hand in a pull request for dev branch,
     // if the branch already exists catch the exception because then we can just go on for a PR
