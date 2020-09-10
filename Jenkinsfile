@@ -467,12 +467,32 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
             }
             break
         case "release":
-            if (targetBranchType == "main") {
+            if (targetBranchType == "main" || targetBranchType == "dev") {
+                Integer targetMajor = targetBranchVersion[0].toInteger()
+                Integer targetMinor = targetBranchVersion[1].toInteger()
 
-            } else if (targetBranchType == "dev") {
+                Integer sourceMajor = sourceBranchVersion[0].toInteger()
+                Integer sourceMinor = sourceBranchVersion[1].toInteger()
 
+                boolean validCheck1 = targetMajor == sourceMajor && targetMinor + 1 == sourceMinor
+                boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
+
+                // patch version always needs to be 0
+                boolean patchValid = sourceBranchVersion[2] == 0
+
+                if ((validCheck1 || validCheck2) && patchValid) {
+                    return 0
+                } else {
+                    println "Release branch versioning does not fit to main branch versioning!\n" +
+                            "releaseVersion: ${sourceBranchVersion[0]}.${sourceBranchVersion[1]}.${sourceBranchVersion[2]}\n" +
+                            "mainVersion: ${targetBranchVersion[0]}.${targetBranchVersion[1]}.${targetBranchVersion[2]}"
+                    return -1
+                }
             } else {
-                // invalid branch type for release merge
+                // invalid target branch type for release merge
+                println "Merging release branch into branch type '$targetBranchType' is not supported! Realeas branches" +
+                        "can only be merged into main or dev branch!"
+                return -1
             }
             // major == major OR major == major + 1, minor == minor OR minor == minor + 1, patch == patch == 0
             break
@@ -486,8 +506,8 @@ def compareVersionParts(String sourceBranchType, String[] sourceBranchVersion, S
                 Integer sourceMajor = sourceBranchVersion[0].toInteger()
                 Integer sourceMinor = sourceBranchVersion[1].toInteger()
 
-                boolean validCheck1 = targetMajor == sourceMajor && targetMinor == sourceMinor + 1
-                boolean validCheck2 = targetMajor == sourceMajor + 1 && targetMinor == sourceMinor
+                boolean validCheck1 = targetMajor == sourceMajor && targetMinor + 1 == sourceMinor
+                boolean validCheck2 = targetMajor + 1 == sourceMajor && targetMinor == sourceMinor
 
                 // patch version always needs to be 0
                 boolean patchValid = sourceBranchVersion[2] == 0
