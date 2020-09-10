@@ -206,7 +206,11 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
 
     }
 
+    println gitLogLatestMergeString
+
     String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
+
+    println gitLogLatestMerge
 
     String latestMergeCommitSHA = gitLogLatestMerge[4]
     String latestMergeBranchName = gitLogLatestMerge[37].toLowerCase()
