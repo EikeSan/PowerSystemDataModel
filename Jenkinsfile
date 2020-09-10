@@ -639,10 +639,3 @@ def getBranchType(String branchName) {
         return null
     }
 }
-
-def getCompareBranchName(String branchType) {
-    if (branchType == "feature")
-        return "dev"
-    else
-        return "main"
-}
