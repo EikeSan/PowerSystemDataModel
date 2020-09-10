@@ -197,12 +197,14 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
     // get the latest merge string from git to derive latest commit hash + latest merge branch name
     String gitLogLatestMergeString = ""
     withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
-        gitLogLatestMergeString = sh(script:
+        // cleanup to prepare repo
+        sh(script:
                 "cd $projectName && set +x && " +
                         "ssh-agent bash -c \"ssh-add $sshKey; " +
                         "git branch | grep -v \"$currentBranchName\" | xargs git branch -D;" + // deletes all local branches except main
-                        "git fetch && git checkout $currentBranchName && git pull && " +
-                        "git log --merges -n 1\"", returnStdout: true)
+                        "git fetch && git checkout $currentBranchName && git pull\"", returnStdout: false)
+
+        gitLogLatestMergeString = sh(script: "cd $projectName && set +x && git log --merges -n 1", returnStdout: true)
 
     }
 
@@ -210,7 +212,7 @@ def handleDevPr(String sshCredentialsId, String orgName, String projectName, Str
 
     String[] gitLogLatestMerge = gitLogLatestMergeString.split("\\s")
 
-    for(i in gitLogLatestMerge)
+    for (i in gitLogLatestMerge)
         println(i)
 
     String latestMergeCommitSHA = gitLogLatestMerge[4]
