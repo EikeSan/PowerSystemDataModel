@@ -316,8 +316,8 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
 
     withCredentials([sshUserPrivateKey(credentialsId: sshCredentialsId, keyFileVariable: 'sshKey')]) {
         // cleanup to prepare repo
-        sh(script:
-                "set +x && cd $projectName && " +
+       println( sh(script:
+                "cd $projectName && " +
                         "ssh-agent bash -c \"ssh-add $sshKey; " + // todo add set +x
                         "git branch | grep -v \"$tagBranchName\" | xargs git branch -D; " + // deletes all local branches except tagBranchName
                         "git fetch && git checkout $tagBranchName && git pull && " +
@@ -326,7 +326,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                         "git config user.name \"Johannes Hiry\" && "+
                         "git tag -m 'Release version $projectVersion.' $projectVersion && " +
                         "git push origin --tags" +
-                        "\"", returnStdout: false)
+                        "\"", returnStdout: true))
     }
 
 
