@@ -48,18 +48,13 @@ node {
             // set java version
             setJavaVersion(javaVersionId)
 
-            // set build display name
-            currentBuild.displayName = determineDisplayName()
-
-            // notify rocket chat
-            String startPipelineMsg = buildStartMsg()
-            notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', startPipelineMsg)
-
             // determine branch name that should be checked out
             net.sf.json.JSONObject prJsonObj = getPRJsonObj(orgName, projectName, env.CHANGE_ID)
             String currentBranchName = prJsonObj == null ? env.BRANCH_NAME : prJsonObj.head.ref
             String targetBranchName = prJsonObj == null ? null : prJsonObj.base.ref
-//            String branchType = getBranchType(currentBranchName) // todo JH maybe remove?!
+
+            // notify rocket chat
+            notifyRocketChat(rocketChatChannel, ':jenkins_triggered:', buildStartMsg(currentBranchName, targetBranchName, projectName))
 
             // checkout scm
             String commitHash = ""
@@ -68,6 +63,9 @@ node {
                 // https://www.theserverside.com/blog/Coffee-Talk-Java-News-Stories-and-Opinions/Complete-Jenkins-Git-environment-variables-list-for-batch-jobs-and-shell-script-builds
                 commitHash = gitCheckout(projectName, gitCheckoutUrl, currentBranchName, sshCredentialsId).GIT_COMMIT
             }
+
+            // set build display name
+            currentBuild.displayName = determineDisplayName(currentBranchName, commitHash, orgName, projectName)
 
             if (currentBranchName == "main") {
                 stage('handle dev pr') {
@@ -326,7 +324,7 @@ def createAndPushTagOnMain(String projectName, String sshCredentialsId) {
                             "git push origin --tags" +
                             "\"", returnStdout: false)
         }
-    } catch(Exception e){
+    } catch (Exception e) {
         println "Error when creating tag on main branch! Exception: $e"
     }
 }
@@ -364,17 +362,22 @@ def determineSonarqubeGradleCmd(String sonarqubeProjectKey, String orgName, Stri
     }
 }
 
-def determineDisplayName() {
-    // todo JH
-    String buildVersionNo = currentBuild.displayName // current build default is always the build version no
-    String
-    if (env.BRANCH_NAME == "main" || env.BRANCH_NAME == "dev") {
+def determineDisplayName(String currentBranchName, String commitHash, String orgName, String projectName) {
 
+    String displayName = ""
+    if (currentBranchName == "main" || currentBranchName == "dev") {
+        // main and dev are always merge branches
+
+        def jsonObject = getGithubCommitJsonObj(commitHash, orgName, projectName)
+        featureBranchName = splitStringToBranchName(jsonObject.commit.message)
+
+        displayName = ((featureBranchName?.trim()) ? "merge pr branch '${featureBranchName}'" : "commit '" +
+                "${jsonObject.commit.message.length() <= 20 ? jsonObject.commit.message : jsonObject.commit.message.substring(0, 20)}...'") + " (" + currentBuild.displayName + ")"
     } else {
-
+        displayName = currentBranchName + " (" + currentBuild.displayName + ")"
     }
 
-    return "dummyDisplayName"
+    return displayName
 }
 
 def publishReports(String relativeProjectDir) {
@@ -399,14 +402,14 @@ def notifyRocketChat(String rocketChatChannel, String emoji, String message) {
     rawMessage: true
 }
 
-def buildSuccessMsg() {
-    // todo JH
-    return "dummySuccessMsg"
-}
+def buildStartMsg(String currentBranchName, String targetBranchName, String projectName) {
 
-def buildStartMsg() {
-    // todo JH
-    return "dummyStartMsg"
+    String msg = "Build of branch $currentBranchName triggered.\n" +
+            "*project:* ${projectName}\n" +
+            "*branch:* ${currentBranchName}\n" +
+            targetBranchName != null ? "*target:* ${targetBranchName}" : ""
+
+    return msg
 }
 
 /**
@@ -432,6 +435,19 @@ def temporaryBranchesProps() {
 
 /* git interaction */
 
+def getGithubCommitJsonObj(String commit_sha, String orgName, String repoName) {
+    def jsonObj = readJSON text: curlByCSHA(commit_sha, orgName, repoName)
+    return jsonObj
+}
+
+def curlByCSHA(String commit_sha, String orgName, String repoName) {
+
+    def curlUrl = "curl https://api.github.com/repos/" + orgName + "/" + repoName + "/commits/" + commit_sha
+    String jsonResponseString = sh(script: curlUrl, returnStdout: true)
+
+    return jsonResponseString
+}
+
 def getGithubPRJsonObj(String prId, String orgName, String repoName) {
     def jsonObj = readJSON text: curlByPR(prId, orgName, repoName)
     return jsonObj
@@ -442,13 +458,6 @@ def curlByPR(String prId, String orgName, String repoName) {
     String jsonResponseString = sh(script: curlUrl, returnStdout: true)
     return jsonResponseString
 }
-
-def curlOpenPRs(String orgName, String repoName) {
-    String curlUrl = "set +x && curl -s https://api.github.com/search/issues?q=repo:$orgName/$repoName+is:pr+is:open"
-    def jsonObj = readJSON text: sh(script: curlUrl, returnStdout: true)
-    return jsonObj
-}
-
 
 def getPRJsonObj(String orgName, String projectName, String changeId) {
     if (changeId == null) {
@@ -473,7 +482,7 @@ def checkVersion(String branchName, String targetBranchName, String relativeGitD
     String[] currentVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
 
     /// switch to the comparison branch
-    gitCheckout(projectName, gitCheckoutUrl, targetBranchName, sshCredentialsId) // todo maybe simplify by raw git call
+    gitCheckout(projectName, gitCheckoutUrl, targetBranchName, sshCredentialsId)
     String[] targetBranchVersion = gradle("-q currentVersion", relativeGitDir).toString().split('\\.')
 
     if (compareVersionParts(branchType, currentVersion, getBranchType(targetBranchName), targetBranchVersion) != 0) {
@@ -481,7 +490,7 @@ def checkVersion(String branchName, String targetBranchName, String relativeGitD
         return -1
     } else {
         // switch back to current branch
-        gitCheckout(projectName, gitCheckoutUrl, branchName, sshCredentialsId) // todo maybe simplify by raw git call
+        gitCheckout(projectName, gitCheckoutUrl, branchName, sshCredentialsId)
         return 0
     }
 }
@@ -638,4 +647,12 @@ def getBranchType(String branchName) {
     } else {
         return null
     }
+}
+
+def splitStringToBranchName(String string) {
+    def obj = string.split().find { it.startsWith("ie3-institute") }
+    if (obj)
+        return (obj as String).substring(14)
+    else
+        return ""
 }
