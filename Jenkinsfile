@@ -158,7 +158,7 @@ node {
                     // notify rocket chat
                     String projectVersion =
                             sh(returnStdout: true, script: "set +x && cd ${projectName}; ./gradlew -q printVersion")
-                    projectVersion = projectVersion + (env.BRANCH_NAME == "dev") ? "-SNAPSHOT" : ""
+                    projectVersion = "$projectVersion ${(env.BRANCH_NAME == "dev") ? "-SNAPSHOT" : ""}"
                     String successMsg = "deployment of version $projectVersion from branch '$currentBranchName' to sonatype " +
                             "successful. If this is a deployment from 'main' pls remember visiting https://oss.sonatype.org to " +
                             "stag and release artifact!\n" +
