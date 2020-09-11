@@ -402,10 +402,10 @@ def buildStartMsg(String currentBranchName, String targetBranchName, String proj
 
     String msg = "Build of branch $currentBranchName triggered.\n" +
             "*project:* ${projectName}\n" +
-            "*branch:* ${currentBranchName}\n" +
-            targetBranchName != null ? "*target:* ${targetBranchName}" : ""
+            "*branch:* ${currentBranchName}\n"
+    String targetBranch = targetBranchName != null ? "*target:* ${targetBranchName} \n" : ""
 
-    return msg
+    return msg + targetBranch
 }
 
 /**
