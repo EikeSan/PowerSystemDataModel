@@ -400,7 +400,7 @@ def notifyRocketChat(String rocketChatChannel, String emoji, String message) {
 
 def buildStartMsg(String currentBranchName, String targetBranchName, String projectName) {
 
-    String msg = "Build of branch $currentBranchName triggered.\n" +
+    String msg = "Build triggered.\n" +
             "*project:* ${projectName}\n" +
             "*branch:* ${currentBranchName}\n"
     String targetBranch = targetBranchName != null ? "*target:* ${targetBranchName} \n" : ""
